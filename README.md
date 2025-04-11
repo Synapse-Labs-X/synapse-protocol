@@ -1,47 +1,36 @@
-# RIPPLE
-# Real-World Finance with RLUSD
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-XRP Ledger addresses the need for an accessible platform for the  issuance and management of digital assets . RLUSD is one of those natively issued assets by Ripple fully backed by a segregated reserve of cash and cash equivalents and redeemable 1:1 for US dollars
+## Getting Started
 
-Use RLUSD on XRPL or Ethereum to create a groundbreaking finance app. Your app should leverage RLUSD on testnet (XRPL Testnet / Ethereum Sepolia) to power real-world financial solutions.
-Think DeFi, like lending platforms or yield generating dapps. Explore cross-border transactions, micropayments or ai agents moving value. You can also build products in InsurTech, RegTech, Asset Management, Financial Inclusion, Real World Tokization, and more.
-The challenge: Show how RLUSD can transform finance with real use cases
+First, run the development server:
 
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-## Expected Outcome:
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-Prototype enabling payments using RLUSD on XRP Ledger Testnet or Ethereum Sepolia. Transactions should be able to be verified on blockchain explorers
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Technology
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-You an start by getting some RLUSD tokens on testnet
-Faucet : tryrlusd.com
+## Learn More
 
-## Code examples
+To learn more about Next.js, take a look at the following resources:
 
-Learn more via code examples
-https://github.com/RippleDevRel/xrpl-js-python-simple-scripts
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-## Further Information:
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-Explore all resources
-Resource hub: https://linktr.ee/rippledevrel
+## Deploy on Vercel
 
-## Judging Criteria:
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-* Creativity (30%)
-* Visual design and product (40%)
-* Feasibility (30%)
-
-## Point of Contact:
-
-* Maxime Dienger - Developer Advocate at Ripple
-* Maria Shodunke - Technical Writer at Ripple
-* Ashray Chowdhry - Software Engineer at Ripple
-* Marco Neri - Head of Developer Relations at Ripple
-
-
-
-
-## Price - the winning team members will each receive:
-Opportunity to present the solution this to ripple executives
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
