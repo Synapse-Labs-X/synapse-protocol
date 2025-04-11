@@ -10,6 +10,7 @@ import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
 import { analyzePrompt } from "@/lib/agents/analysis";
 import { executeTransactions } from "@/lib/agents/orchestrator";
+import { Zap } from "lucide-react";
 
 export default function DashboardPage() {
   // State management
@@ -23,9 +24,17 @@ export default function DashboardPage() {
   const [processing, setProcessing] = useState<boolean>(false);
   const [balance, setBalance] = useState<number>(1000); // Initial RLUSD balance
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasMounted, setHasMounted] = useState<boolean>(false);
+
+  // Set mounted state
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // Initialize mock network data
   useEffect(() => {
+    if (!hasMounted) return;
+
     // Simulate loading delay
     const loadTimer = setTimeout(() => {
       const initialNodes: Agent[] = [
@@ -135,7 +144,7 @@ export default function DashboardPage() {
     }, 1500);
 
     return () => clearTimeout(loadTimer);
-  }, []);
+  }, [hasMounted]);
 
   // Handle prompt submission
   const handleSubmit = async (promptText: string) => {
@@ -300,12 +309,18 @@ export default function DashboardPage() {
     setSelectedAgent(null);
   };
 
-  if (isLoading) {
+  // Show loading state while mounting or initializing data
+  if (!hasMounted || isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
+          <Zap size={36} className="text-yellow-400 mx-auto mb-4" />
           <div className="w-16 h-16 border-t-4 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-white">Loading Synapse Dashboard...</p>
+          <p className="mt-4 text-white">
+            {!hasMounted
+              ? "Initializing Synapse..."
+              : "Loading Synapse Dashboard..."}
+          </p>
         </div>
       </div>
     );

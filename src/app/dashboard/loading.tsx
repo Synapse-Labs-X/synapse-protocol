@@ -15,7 +15,7 @@ export default function Loading() {
           <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
 
           {/* Secondary spinner (slower, opposite direction) */}
-          <div className="absolute inset-2 border-4 border-yellow-400 border-b-transparent rounded-full animate-spin animation-delay-500 animate-[spin_2s_linear_infinite_reverse]"></div>
+          <div className="absolute inset-2 border-4 border-yellow-400 border-b-transparent rounded-full animation-delay-500 animate-[spin_2s_linear_infinite_reverse]"></div>
 
           {/* Central circle */}
           <div className="absolute inset-5 rounded-full bg-gray-800 flex items-center justify-center">

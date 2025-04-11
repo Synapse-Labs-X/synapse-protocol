@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState, JSX } from "react";
-import ForceGraph2D from "react-force-graph-2d";
+import dynamic from "next/dynamic";
 import {
   Agent,
   AgentNetwork as AgentNetworkType,
@@ -9,6 +9,11 @@ import {
 } from "@/types/agent";
 import { Cpu, Bot, BarChart2, Layers, MessageSquare } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
+
+// Import ForceGraph2D with no SSR
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
+  ssr: false,
+});
 
 interface AgentNetworkProps {
   network: AgentNetworkType;
@@ -55,9 +60,17 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     nodes: [],
     links: [],
   });
+  const [hasMounted, setHasMounted] = useState(false);
+
+  // Set mounted state
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // Convert network data to format expected by ForceGraph2D
   useEffect(() => {
+    if (!hasMounted) return;
+
     const nodes: GraphNode[] = network.nodes.map((node) => ({
       ...node,
     }));
@@ -69,7 +82,7 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     }));
 
     setGraphData({ nodes, links });
-  }, [network]);
+  }, [network, hasMounted]);
 
   // Agent type styling
   const agentStyles: Record<AgentType, { color: string; icon: JSX.Element }> = {
@@ -80,8 +93,10 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     assistant: { color: "#6B48FF", icon: <Bot size={20} /> },
   };
 
-  // Update dimensions on resize
+  // Update dimensions on resize - only after component has mounted
   useEffect(() => {
+    if (!hasMounted) return;
+
     const handleResize = () => {
       const container = document.getElementById("graph-container");
       if (container) {
@@ -95,7 +110,7 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [hasMounted]);
 
   // Graph event handlers
   const handleNodeClick = (node: GraphNode) => {
@@ -107,64 +122,81 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     return typeof node === "string" ? node : node.id;
   };
 
+  // Show a loading placeholder if not mounted yet
+  if (!hasMounted) {
+    return (
+      <div
+        id="graph-container"
+        className="w-full h-full flex items-center justify-center bg-gray-800"
+      >
+        <div className="text-center">
+          <div className="w-12 h-12 border-t-4 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-400">Loading network visualization...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div id="graph-container" className="w-full h-full relative">
-      <ForceGraph2D
-        ref={graphRef}
-        graphData={graphData}
-        width={dimensions.width}
-        height={dimensions.height}
-        nodeLabel={(node: GraphNode) =>
-          `${node.name} (${formatCurrency(node.balance)})`
-        }
-        nodeColor={(node: GraphNode) => {
-          // Highlight selected agents
-          if (selectedAgents.includes(node.id)) {
-            return "#ffffff"; // Bright white for selected
+      {hasMounted && (
+        <ForceGraph2D
+          ref={graphRef}
+          graphData={graphData}
+          width={dimensions.width}
+          height={dimensions.height}
+          nodeLabel={(node: GraphNode) =>
+            `${node.name} (${formatCurrency(node.balance)})`
           }
-          return agentStyles[node.type]?.color || "#999";
-        }}
-        nodeRelSize={8}
-        linkWidth={(link) => 1 + (link.value as number) / 2}
-        linkColor={() => "rgba(255, 255, 255, 0.2)"}
-        onNodeClick={handleNodeClick}
-        cooldownTicks={100}
-        linkDirectionalParticles={(link) => {
-          const source = getNodeId(link.source);
-          const target = getNodeId(link.target);
+          nodeColor={(node: GraphNode) => {
+            // Highlight selected agents
+            if (selectedAgents.includes(node.id)) {
+              return "#ffffff"; // Bright white for selected
+            }
+            return agentStyles[node.type]?.color || "#999";
+          }}
+          nodeRelSize={8}
+          linkWidth={(link) => 1 + (link.value as number) / 2}
+          linkColor={() => "rgba(255, 255, 255, 0.2)"}
+          onNodeClick={handleNodeClick}
+          cooldownTicks={100}
+          linkDirectionalParticles={(link) => {
+            const source = getNodeId(link.source);
+            const target = getNodeId(link.target);
 
-          // Show particles for active transactions
-          if (
-            selectedAgents.length > 0 &&
-            source === "main-agent" &&
-            selectedAgents.includes(target) &&
-            processingTransaction
-          ) {
-            return 6; // More particles for active transactions
-          }
+            // Show particles for active transactions
+            if (
+              selectedAgents.length > 0 &&
+              source === "main-agent" &&
+              selectedAgents.includes(target) &&
+              processingTransaction
+            ) {
+              return 6; // More particles for active transactions
+            }
 
-          return (link.value as number) > 0
-            ? Math.min(link.value as number, 3)
-            : 0;
-        }}
-        linkDirectionalParticleSpeed={0.01}
-        linkDirectionalParticleWidth={2}
-        linkDirectionalParticleColor={(link) => {
-          const source = getNodeId(link.source);
-          const target = getNodeId(link.target);
+            return (link.value as number) > 0
+              ? Math.min(link.value as number, 3)
+              : 0;
+          }}
+          linkDirectionalParticleSpeed={0.01}
+          linkDirectionalParticleWidth={2}
+          linkDirectionalParticleColor={(link) => {
+            const source = getNodeId(link.source);
+            const target = getNodeId(link.target);
 
-          if (
-            selectedAgents.length > 0 &&
-            source === "main-agent" &&
-            selectedAgents.includes(target) &&
-            processingTransaction
-          ) {
-            return "#FFE066"; // Bright yellow for active transactions
-          }
+            if (
+              selectedAgents.length > 0 &&
+              source === "main-agent" &&
+              selectedAgents.includes(target) &&
+              processingTransaction
+            ) {
+              return "#FFE066"; // Bright yellow for active transactions
+            }
 
-          return "#FFFFFF33";
-        }}
-      />
+            return "#FFFFFF33";
+          }}
+        />
+      )}
     </div>
   );
 };
