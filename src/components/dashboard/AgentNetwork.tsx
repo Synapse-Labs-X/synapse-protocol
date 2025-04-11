@@ -113,13 +113,19 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
   }, [hasMounted]);
 
   // Graph event handlers
-  const handleNodeClick = (node: GraphNode) => {
-    onNodeClick(node);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+  const handleNodeClick = (node: any, _event: MouseEvent) => {
+    onNodeClick(node as GraphNode);
   };
 
   // Extract node id safely
-  const getNodeId = (node: string | GraphNode): string => {
-    return typeof node === "string" ? node : node.id;
+  const getNodeId = (
+    node: string | GraphNode | number | { id?: string | number } | undefined
+  ): string => {
+    if (typeof node === "string") return node;
+    if (typeof node === "number") return node.toString();
+    if (!node) return "";
+    return (node.id || "").toString();
   };
 
   // Show a loading placeholder if not mounted yet
@@ -145,15 +151,19 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
           graphData={graphData}
           width={dimensions.width}
           height={dimensions.height}
-          nodeLabel={(node: GraphNode) =>
-            `${node.name} (${formatCurrency(node.balance)})`
-          }
-          nodeColor={(node: GraphNode) => {
+          nodeLabel={(node) => {
+            const graphNode = node as unknown as GraphNode;
+            return `${graphNode.name || "Unknown"} (${formatCurrency(
+              graphNode.balance || 0
+            )})`;
+          }}
+          nodeColor={(node) => {
             // Highlight selected agents
-            if (selectedAgents.includes(node.id)) {
+            const graphNode = node as unknown as GraphNode;
+            if (selectedAgents.includes(graphNode.id)) {
               return "#ffffff"; // Bright white for selected
             }
-            return agentStyles[node.type]?.color || "#999";
+            return agentStyles[graphNode.type]?.color || "#999";
           }}
           nodeRelSize={8}
           linkWidth={(link) => 1 + (link.value as number) / 2}

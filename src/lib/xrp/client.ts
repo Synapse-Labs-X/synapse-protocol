@@ -28,7 +28,7 @@ interface XrplAccountInfoResult {
 // XRP Client Singleton
 class XrpClient {
   private static instance: XrpClient;
-  private client: Client;
+  public client: Client;
   private wallets: Map<string, Wallet> = new Map();
   private initialized: boolean = false;
   private networkUrl: string;

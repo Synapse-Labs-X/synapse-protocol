@@ -1,5 +1,6 @@
-import { TransactionResponse, TransactionRequest } from "@/types/transaction";
-import XrpClient from "../xrp/client";
+import { TransactionResponse, TransactionRequest } from '@/types/transaction';
+import XrpClient from '../xrp/client';
+import transactionService from '../xrp/transactionService';
 
 /**
  * Main orchestrator for agent interactions and transactions
@@ -10,9 +11,6 @@ export async function executeTransactions(
   toAgentIds: string[],
   amounts: number[],
 ): Promise<TransactionResponse[]> {
-  // Initialize XRP client
-  const xrpClient = XrpClient.getInstance();
-
   // Use simulation for demo, or real transactions if needed
   const useRealTransactions =
     process.env.NEXT_PUBLIC_USE_REAL_TRANSACTIONS === "true";
@@ -37,9 +35,10 @@ export async function executeTransactions(
 
       if (useRealTransactions) {
         // Use actual XRP Testnet transactions
-        response = await xrpClient.sendPayment(transactionRequest);
+        response = await transactionService.executeTransaction(transactionRequest);
       } else {
         // Use simulated transactions for demo
+        const xrpClient = XrpClient.getInstance();
         response = await xrpClient.simulateTransaction(transactionRequest);
       }
 

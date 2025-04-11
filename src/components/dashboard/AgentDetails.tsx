@@ -11,6 +11,7 @@ import {
 import { Agent, AgentType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils/formatters";
+import TransactionButton from "./TransactionButton";
 
 interface AgentDetailsProps {
   agent: Agent;
@@ -252,18 +253,33 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           <button className="bg-gray-700 hover:bg-gray-600 text-sm px-4 py-2 rounded-lg flex-1 transition-colors">
             View Details
           </button>
-          <button
-            className="bg-blue-600 hover:bg-blue-700 text-sm px-4 py-2 rounded-lg flex-1 transition-colors"
-            style={{ backgroundColor: `${agentColor}`, opacity: 0.9 }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.opacity = "1";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.opacity = "0.9";
-            }}
-          >
-            Interact
-          </button>
+          {agent.type !== "main" ? (
+            <button
+              className="bg-blue-600 hover:bg-blue-700 text-sm px-4 py-2 rounded-lg flex-1 transition-colors"
+              style={{ backgroundColor: `${agentColor}`, opacity: 0.9 }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.opacity = "1";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.opacity = "0.9";
+              }}
+            >
+              Interact
+            </button>
+          ) : (
+            <TransactionButton
+              sourceAgent={agent}
+              targetAgent={{
+                id: "summarizer",
+                name: "Content Summarizer",
+                type: "assistant",
+                balance: 0,
+                cost: 3,
+                status: "active",
+              }}
+              className="flex-1 text-sm"
+            />
+          )}
         </div>
 
         {/* Agent Analytics Preview */}

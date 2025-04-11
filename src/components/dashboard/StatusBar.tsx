@@ -1,17 +1,25 @@
 import React from "react";
 import { Zap, Database, FileText, Server } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
+import StatusBarMenu from "./StatusBarMenu";
+import { Agent } from "@/types/agent";
 
 interface StatusBarProps {
   balance: number;
   network: string;
   transactionCount: number;
+  mainAgent?: Agent;
+  agents?: Agent[];
+  onTransactionComplete?: () => void;
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({
   balance,
   network,
   transactionCount,
+  mainAgent,
+  agents = [],
+  onTransactionComplete,
 }) => {
   return (
     <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
@@ -47,6 +55,14 @@ const StatusBar: React.FC<StatusBarProps> = ({
             <div className="text-sm">{transactionCount}</div>
           </div>
         </div>
+
+        {mainAgent && agents.length > 0 && (
+          <StatusBarMenu
+            mainAgent={mainAgent}
+            targetAgents={agents.filter((a) => a.id !== mainAgent.id)}
+            onTransactionComplete={onTransactionComplete}
+          />
+        )}
       </div>
     </div>
   );

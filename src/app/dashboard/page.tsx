@@ -333,6 +333,12 @@ export default function DashboardPage() {
         balance={balance}
         network="XRP Testnet"
         transactionCount={transactions.length}
+        mainAgent={network.nodes.find((node) => node.id === "main-agent")}
+        agents={network.nodes}
+        onTransactionComplete={() => {
+          // Refresh data after transaction
+          setTransactions((prev) => [...prev]);
+        }}
       />
 
       {/* Main Content */}
