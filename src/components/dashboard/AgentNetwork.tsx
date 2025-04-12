@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { formatCurrency } from "@/lib/utils/formatters";
@@ -48,49 +48,118 @@ const AgentNetwork = ({
   selectedAgents = [],
   processingTransaction = false,
 }: AgentNetworkProps) => {
-  const graphRef = useRef<ForceGraphMethods>(null);
+  // Use MutableRefObject to match what ForceGraph2D expects
+  const graphRef = useRef<ForceGraphMethods>(
+    null
+  ) as React.MutableRefObject<ForceGraphMethods>;
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
     links: [],
   });
   const [hasMounted, setHasMounted] = useState(false);
+  const [needsZooming, setNeedsZooming] = useState(true);
 
-  // Set mounted state
+  // Handle zoom to fit - extracted as a reusable function
+  const zoomToFit = useCallback(() => {
+    if (graphRef.current && graphData.nodes.length > 0) {
+      graphRef.current.zoomToFit(400, 60); // 400ms duration, 60px padding
+      setNeedsZooming(false);
+    }
+  }, [graphData.nodes.length]);
+
+  // Set mounted state and initial setup
   useEffect(() => {
     setHasMounted(true);
+
+    // Give the DOM a chance to render fully before initializing
+    const timer = setTimeout(() => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDimensions({
+          width: rect.width || 800,
+          height: rect.height || 600,
+        });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
-  // Create graph data with positioning logic
+  // Update dimensions on resize
   useEffect(() => {
     if (!hasMounted) return;
 
+    const handleResize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDimensions({
+          width: Math.max(rect.width, 100),
+          height: Math.max(rect.height, 100),
+        });
+        setNeedsZooming(true); // Need to re-zoom after resize
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [hasMounted]);
+
+  // Ensure dimensions are properly set whenever container changes
+  useEffect(() => {
+    if (containerRef.current && hasMounted) {
+      const rect = containerRef.current.getBoundingClientRect();
+      if (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        (dimensions.width !== rect.width || dimensions.height !== rect.height)
+      ) {
+        setDimensions({
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    }
+  }, [containerRef.current, hasMounted, dimensions]);
+
+  // Create graph data with positioning logic based on current dimensions
+  useEffect(() => {
+    if (
+      !hasMounted ||
+      dimensions.width === 0 ||
+      dimensions.height === 0 ||
+      network.nodes.length === 0
+    ) {
+      return;
+    }
+
     // Clone the nodes and calculate positions for a fixed layout
     const nodes: GraphNode[] = network.nodes.map((node) => {
-      // For main agent, fixed position at the top (north)
+      // For main agent, fixed position at the center top
       if (node.id === "main-agent") {
         return {
           ...node,
           fx: dimensions.width / 2, // Center horizontally
-          fy: 70, // Fixed position at the top
+          fy: dimensions.height * 0.2, // Fixed position near the top (20% from top)
         };
       }
 
-      // For other nodes, pre-calculate positions in a semi-circle around the bottom
+      // For other nodes, pre-calculate positions in a semi-circle at the bottom
       const otherNodes = network.nodes.filter((n) => n.id !== "main-agent");
       const indexOfNode = otherNodes.findIndex((n) => n.id === node.id);
 
       if (indexOfNode !== -1) {
         const totalNodes = otherNodes.length;
-        const angleStep = Math.PI / totalNodes;
+        const angleStep = Math.PI / Math.max(1, totalNodes - 1); // Avoid division by zero
         const angle = indexOfNode * angleStep;
 
         // Calculate position in a semi-circle
-        const radius = Math.min(dimensions.width, dimensions.height);
-        const x =
-          dimensions.width / 2 + radius * Math.cos(angle + Math.PI / 14);
-        const y =
-          dimensions.height * 0.6 + radius * Math.sin(angle + Math.PI / 14);
+        const radiusX = Math.min(dimensions.width, dimensions.height) * 0.8; // Use 30% of smaller dimension for better layout
+        const radiusY = Math.min(dimensions.width, dimensions.height) * 0.5; // Use 30% of smaller dimension for better layout
+
+        const x = dimensions.width / 2 + radiusX * Math.cos(angle);
+        const y = dimensions.height * 0.7 + radiusY * Math.sin(angle);
 
         return {
           ...node,
@@ -139,7 +208,20 @@ const AgentNetwork = ({
     });
 
     setGraphData({ nodes, links: allLinks });
+    setNeedsZooming(true);
   }, [network, hasMounted, dimensions]);
+
+  // Center the graph whenever needed
+  useEffect(() => {
+    if (needsZooming && hasMounted && graphData.nodes.length > 0) {
+      // Use a short delay to ensure the graph has rendered
+      const timer = setTimeout(() => {
+        zoomToFit();
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [needsZooming, hasMounted, graphData.nodes.length, zoomToFit]);
 
   // Agent styling by type
   const agentStyles = {
@@ -150,25 +232,6 @@ const AgentNetwork = ({
     assistant: { color: "#6B48FF", glowColor: "#7C4DFF" },
   };
 
-  // Update dimensions on resize
-  useEffect(() => {
-    if (!hasMounted) return;
-
-    const handleResize = () => {
-      const container = document.getElementById("graph-container");
-      if (container) {
-        setDimensions({
-          width: container.clientWidth,
-          height: container.clientHeight,
-        });
-      }
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [hasMounted]);
-
   // Extract node id safely
   const getNodeId = (
     node: string | GraphNode | number | { id?: string | number } | undefined
@@ -178,6 +241,18 @@ const AgentNetwork = ({
     if (!node) return "";
     return (node.id || "").toString();
   };
+
+  // This effect handles the ref assignment after the component is mounted
+  useEffect(() => {
+    // If we have a graph ref and there are nodes to display, zoom to fit
+    if (graphRef.current && graphData.nodes.length > 0) {
+      setTimeout(() => {
+        if (graphRef.current) {
+          graphRef.current.zoomToFit(400, 60);
+        }
+      }, 300);
+    }
+  }, [graphRef.current, graphData.nodes.length]);
 
   // Custom node rendering function
   const nodeCanvasObject = (
@@ -324,7 +399,7 @@ const AgentNetwork = ({
   if (!hasMounted) {
     return (
       <div
-        id="graph-container"
+        ref={containerRef}
         className="w-full h-full flex items-center justify-center bg-gray-900"
       >
         <div className="text-center">
@@ -342,8 +417,8 @@ const AgentNetwork = ({
   };
 
   return (
-    <div id="graph-container" className="w-full h-full relative bg-gray-900">
-      {hasMounted && (
+    <div ref={containerRef} className="w-full h-full relative bg-gray-900">
+      {hasMounted && graphData.nodes.length > 0 && (
         <ForceGraph2D
           ref={graphRef as React.MutableRefObject<ForceGraphMethods>}
           graphData={graphData}
@@ -422,7 +497,6 @@ const AgentNetwork = ({
           }}
           nodeRelSize={10}
           linkWidth={(link) => {
-            // const value = link.value as number;
             const source = getNodeId(link.source);
             const target = getNodeId(link.target);
 
@@ -462,9 +536,9 @@ const AgentNetwork = ({
             return "rgba(80, 80, 255, 0.8)";
           }}
           onNodeClick={handleNodeClick}
-          cooldownTicks={0}
-          d3AlphaDecay={0.02}
-          d3VelocityDecay={0.1}
+          cooldownTicks={50} // Limited cooling for stability
+          d3AlphaDecay={0.02} // Slower decay for more stable positioning
+          d3VelocityDecay={0.2} // Lower value for smoother movement
           linkDirectionalParticles={(link) => {
             const source = getNodeId(link.source);
             const target = getNodeId(link.target);
@@ -532,8 +606,12 @@ const AgentNetwork = ({
             return "#FFFFFF33"; // Semi-transparent white for regular particles
           }}
           backgroundColor="#0F172A" // Dark blue background
-          // Disable physics simulation since we're using fixed positions
-          cooldownTime={0}
+          onEngineStop={() => {
+            // When the simulation stops, ensure we're centered properly
+            if (graphRef.current) {
+              zoomToFit();
+            }
+          }}
         />
       )}
     </div>
