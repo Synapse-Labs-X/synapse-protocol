@@ -17,8 +17,8 @@ class WalletService {
   public isCrossmarkInstalled(): boolean {
     try {
       return this.crossmark.isInstalled();
-    } catch (error) {
-      console.log("Error checking Crossmark installation:", error);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_) {
       return false;
     }
   }
