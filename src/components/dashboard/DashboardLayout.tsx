@@ -31,6 +31,11 @@ interface EnhancedDashboardProps {
   onCloseDetails: () => void;
   onPromptSubmit: (prompt: string) => Promise<void>;
   onTransactionComplete: () => void;
+  walletStatus?: {
+    initialized: string[];
+    pending: string[];
+    failed: string[];
+  };
   onBalanceUpdate: (amount: number) => void;
 }
 
@@ -46,6 +51,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
   onCloseDetails,
   onPromptSubmit,
   onTransactionComplete,
+  walletStatus,
   onBalanceUpdate,
 }) => {
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
@@ -87,6 +93,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           agents={network.nodes}
           onTransactionComplete={onTransactionComplete}
           onBalanceUpdate={onBalanceUpdate}
+          walletStatus={walletStatus}
         />
 
         {/* Mobile toggle button */}

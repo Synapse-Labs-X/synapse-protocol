@@ -1,15 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Client, Wallet, xrpToDrops, dropsToXrp } from 'xrpl';
-import { Transaction, TransactionRequest, TransactionResponse } from '@/types/transaction';
+import { Client, Wallet, xrpToDrops, dropsToXrp } from "xrpl";
+import {
+  Transaction,
+  TransactionRequest,
+  TransactionResponse,
+} from "@/types/transaction";
 
 // Type definitions to handle XRPL response structures
 interface XrplTransactionResult {
   result: {
     hash?: string;
     ledger_index?: number;
-    meta?: {
-      TransactionResult?: string;
-    } | string;
+    meta?:
+      | {
+          TransactionResult?: string;
+        }
+      | string;
     Fee?: string;
     [key: string]: any;
   };
@@ -31,11 +37,18 @@ class XrpClient {
   public client: Client;
   private wallets: Map<string, Wallet> = new Map();
   private initialized: boolean = false;
+  private initializing: boolean = false;
+  private connectionPromise: Promise<void> | null = null;
   private networkUrl: string;
+
+  // Cache for wallet promises to avoid duplicate wallet creation
+  private walletPromises: Map<string, Promise<Wallet>> = new Map();
 
   private constructor() {
     // XRP Testnet URL
-    this.networkUrl = process.env.NEXT_PUBLIC_XRP_TESTNET_URL || 'wss://s.altnet.rippletest.net:51233';
+    this.networkUrl =
+      process.env.NEXT_PUBLIC_XRP_TESTNET_URL ||
+      "wss://s.altnet.rippletest.net:51233";
     this.client = new Client(this.networkUrl);
   }
 
@@ -47,16 +60,34 @@ class XrpClient {
   }
 
   public async initialize(): Promise<void> {
-    if (!this.initialized) {
-      try {
-        console.log('Connecting to XRP Testnet...');
+    // If already initialized, return immediately
+    if (this.initialized) {
+      return;
+    }
+
+    // If currently initializing, wait for that promise to resolve
+    if (this.initializing && this.connectionPromise) {
+      return this.connectionPromise;
+    }
+
+    // Start initialization
+    this.initializing = true;
+
+    try {
+      this.connectionPromise = (async () => {
+        console.log("Connecting to XRP Testnet...");
         await this.client.connect();
         this.initialized = true;
-        console.log('Connected to XRP Testnet');
-      } catch (error) {
-        console.error('Failed to connect to XRP Testnet:', error);
-        throw error;
-      }
+        console.log("Connected to XRP Testnet");
+      })();
+
+      await this.connectionPromise;
+    } catch (error) {
+      console.error("Failed to connect to XRP Testnet:", error);
+      throw error;
+    } finally {
+      this.initializing = false;
+      this.connectionPromise = null;
     }
   }
 
@@ -72,13 +103,29 @@ class XrpClient {
       await this.initialize();
     }
 
+    // Check if we already have this wallet
     let wallet = this.wallets.get(agentId);
-    if (!wallet) {
-      // Check if we have a stored wallet for this agent
-      // For demo, we'll create a new one each time
-      wallet = await this.createWallet(agentId);
+    if (wallet) {
+      return wallet;
     }
-    return wallet;
+
+    // Check if we're already in the process of creating this wallet
+    const existingPromise = this.walletPromises.get(agentId);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    // Create a new wallet promise
+    const walletPromise = this.createWallet(agentId);
+    this.walletPromises.set(agentId, walletPromise);
+
+    try {
+      wallet = await walletPromise;
+      return wallet;
+    } finally {
+      // Clean up promise cache after it resolves/rejects
+      this.walletPromises.delete(agentId);
+    }
   }
 
   public async createWallet(agentId: string): Promise<Wallet> {
@@ -114,26 +161,34 @@ class XrpClient {
     const { fromAgentId, toAgentId, amount, memo } = request;
 
     try {
-      // Get wallets
-      const fromWallet = await this.getWallet(fromAgentId);
-      const toWallet = await this.getWallet(toAgentId);
+      // Get wallets in parallel
+      const [fromWallet, toWallet] = await Promise.all([
+        this.getWallet(fromAgentId),
+        this.getWallet(toAgentId),
+      ]);
 
       // Prepare transaction
       const prepared = await this.client.autofill({
-        TransactionType: 'Payment',
+        TransactionType: "Payment",
         Account: fromWallet.address,
         Amount: xrpToDrops(amount), // Convert to drops (XRP's smallest unit)
         Destination: toWallet.address,
-        Memos: memo ? [{
-          Memo: {
-            MemoData: Buffer.from(memo, 'utf8').toString('hex')
-          }
-        }] : undefined
+        Memos: memo
+          ? [
+              {
+                Memo: {
+                  MemoData: Buffer.from(memo, "utf8").toString("hex"),
+                },
+              },
+            ]
+          : undefined,
       });
 
       // Sign and submit transaction
       const signed = fromWallet.sign(prepared);
-      const result = await this.client.submitAndWait(signed.tx_blob) as unknown as XrplTransactionResult;
+      const result = (await this.client.submitAndWait(
+        signed.tx_blob
+      )) as unknown as XrplTransactionResult;
 
       // Check for transaction success
       const isSuccess = this.isTransactionSuccessful(result);
@@ -147,23 +202,23 @@ class XrpClient {
         from: fromAgentId,
         to: toAgentId,
         amount,
-        currency: 'RLUSD',
+        currency: "RLUSD",
         timestamp: new Date().toISOString(),
-        status: isSuccess ? 'confirmed' : 'failed',
-        type: 'payment',
+        status: isSuccess ? "confirmed" : "failed",
+        type: "payment",
         xrpTxHash: result.result.hash,
         ledgerIndex: result.result.ledger_index,
         fee: fee,
-        memo: memo
+        memo: memo,
       };
 
       return {
         transaction,
         success: isSuccess,
-        ledgerResponse: result
+        ledgerResponse: result,
       };
     } catch (error) {
-      console.error('Payment failed:', error);
+      console.error("Payment failed:", error);
 
       // Create failed transaction record
       const transaction: Transaction = {
@@ -171,17 +226,17 @@ class XrpClient {
         from: fromAgentId,
         to: toAgentId,
         amount,
-        currency: 'RLUSD',
+        currency: "RLUSD",
         timestamp: new Date().toISOString(),
-        status: 'failed',
-        type: 'payment',
-        memo: memo
+        status: "failed",
+        type: "payment",
+        memo: memo,
       };
 
       return {
         transaction,
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : "Unknown error",
       };
     }
   }
@@ -193,8 +248,8 @@ class XrpClient {
     const { meta } = result.result;
 
     // Check if meta is an object with TransactionResult property
-    if (meta && typeof meta === 'object' && 'TransactionResult' in meta) {
-      return meta.TransactionResult === 'tesSUCCESS';
+    if (meta && typeof meta === "object" && "TransactionResult" in meta) {
+      return meta.TransactionResult === "tesSUCCESS";
     }
 
     return false;
@@ -207,7 +262,7 @@ class XrpClient {
     try {
       return dropsToXrp(result.result.Fee);
     } catch (error) {
-      console.error('Error parsing transaction fee:', error);
+      console.error("Error parsing transaction fee:", error);
       return 0;
     }
   }
@@ -219,18 +274,18 @@ class XrpClient {
 
     try {
       const wallet = await this.getWallet(agentId);
-      const accountInfo = await this.client.request({
-        command: 'account_info',
+      const accountInfo = (await this.client.request({
+        command: "account_info",
         account: wallet.address,
-        ledger_index: 'validated'
-      }) as unknown as XrplAccountInfoResult;
+        ledger_index: "validated",
+      })) as unknown as XrplAccountInfoResult;
 
       if (accountInfo?.result?.account_data?.Balance) {
         try {
           // Convert from drops to XRP
           return dropsToXrp(accountInfo.result.account_data.Balance);
         } catch (error) {
-          console.error('Error parsing balance:', error);
+          console.error("Error parsing balance:", error);
           return 0;
         }
       }
@@ -248,7 +303,7 @@ class XrpClient {
     const { fromAgentId, toAgentId, amount, memo } = request;
 
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Create simulated transaction
     const transaction: Transaction = {
@@ -256,19 +311,21 @@ class XrpClient {
       from: fromAgentId,
       to: toAgentId,
       amount,
-      currency: 'RLUSD',
+      currency: "RLUSD",
       timestamp: new Date().toISOString(),
-      status: 'confirmed',
-      type: 'payment',
-      xrpTxHash: `simulated-hash-${Math.random().toString(36).substring(2, 15)}`,
+      status: "confirmed",
+      type: "payment",
+      xrpTxHash: `simulated-hash-${Math.random()
+        .toString(36)
+        .substring(2, 15)}`,
       ledgerIndex: Math.floor(Math.random() * 1000000),
       memo: memo,
-      fee: 0.000012 // Standard XRP transaction fee
+      fee: 0.000012, // Standard XRP transaction fee
     };
 
     return {
       transaction,
-      success: true
+      success: true,
     };
   }
 }
