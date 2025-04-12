@@ -81,7 +81,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
         <div className="flex items-center justify-between p-4">
           {/* Logo and Title */}
           <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-800 shadow-lg">
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-white from-blue-600 to-indigo-800 shadow-lg">
               <Image
                 width={20}
                 height={20}
