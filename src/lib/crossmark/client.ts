@@ -1,24 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Crossmark wallet integration client
+// src/lib/crossmark/client.ts
 import { TransactionResponse, TransactionStatus, TransactionType } from '@/types/transaction';
-
-// Crossmark SDK types
-interface CrossmarkSDK {
-    isConnected: () => Promise<boolean>;
-    connect: () => Promise<string>;
-    disconnect: () => Promise<void>;
-    getAddress: () => Promise<string | null>;
-    getBalance: () => Promise<{ xrp: number;[key: string]: number }>;
-    signAndSubmitTransaction: (tx: any) => Promise<any>;
-    on: (event: string, callback: (...args: any[]) => void) => void;
-    off: (event: string, callback: (...args: any[]) => void) => void;
-}
-
-declare global {
-    interface Window {
-        crossmark?: CrossmarkSDK;
-    }
-}
+import sdk from "@crossmarkio/sdk";
 
 export class CrossmarkClient {
     private static instance: CrossmarkClient;
@@ -35,42 +18,39 @@ export class CrossmarkClient {
     }
 
     /**
-     * Check if Crossmark extension is installed
+     * Check if the Crossmark wallet extension is installed.
+     * Uses sdk.sync.isInstalled().
      */
     public isInstalled(): boolean {
-        return typeof window !== 'undefined' && !!window.crossmark;
+        return sdk.sync.isInstalled() ?? false;
     }
 
     /**
-     * Check if wallet is connected
+     * Check if the wallet is connected.
+     * (Connection state is tracked locally.)
      */
     public async isConnected(): Promise<boolean> {
-        if (!this.isInstalled()) return false;
-
-        try {
-            this.connected = await window.crossmark!.isConnected();
-            if (this.connected) {
-                this.address = await window.crossmark!.getAddress();
-            }
-            return this.connected;
-        } catch (error) {
-            console.error('Failed to check Crossmark connection status:', error);
-            return false;
-        }
+        return this.connected && !!this.address;
     }
 
     /**
-     * Connect to Crossmark wallet
+     * Connect to the Crossmark wallet.
+     * Uses sdk.async.signInAndWait() to initiate sign‑in and obtain the wallet address.
      */
     public async connect(): Promise<string | null> {
         if (!this.isInstalled()) {
             throw new Error('Crossmark extension is not installed');
         }
-
         try {
-            this.address = await window.crossmark!.connect();
-            this.connected = !!this.address;
-            return this.address;
+            const response = await sdk.async.signInAndWait();
+            if (response.response.data.address) {
+                this.connected = true;
+                this.address = response.response.data.address;
+                return this.address;
+            } else {
+                this.connected = false;
+                return null;
+            }
         } catch (error) {
             console.error('Failed to connect to Crossmark wallet:', error);
             throw error;
@@ -78,92 +58,80 @@ export class CrossmarkClient {
     }
 
     /**
-     * Disconnect from Crossmark wallet
+     * Disconnect the wallet.
+     * (Clears the local connection state.)
      */
     public async disconnect(): Promise<void> {
-        if (!this.isInstalled() || !this.connected) return;
-
-        try {
-            await window.crossmark!.disconnect();
-            this.connected = false;
-            this.address = null;
-        } catch (error) {
-            console.error('Failed to disconnect from Crossmark wallet:', error);
-            throw error;
-        }
+        this.connected = false;
+        this.address = null;
+        return;
     }
 
     /**
-     * Get the connected wallet address
+     * Get the currently connected wallet address.
      */
     public getAddress(): string | null {
         return this.address;
     }
 
     /**
-     * Get wallet balances
+     * Sign and submit a transaction.
+     * Delegates to sdk.async.signAndWait().
      */
-    public async getBalance(): Promise<{ xrp: number;[key: string]: number }> {
-        if (!this.isInstalled() || !this.connected) {
-            throw new Error('Crossmark wallet is not connected');
-        }
-
+    public async signAndSubmitTransaction(tx: any): Promise<any> {
         try {
-            return await window.crossmark!.getBalance();
+            return await sdk.async.signAndSubmitAndWait(tx);
         } catch (error) {
-            console.error('Failed to get Crossmark wallet balance:', error);
+            console.error("Error during transaction signing and submission:", error);
             throw error;
         }
     }
 
     /**
-     * Top up balance by transferring XRP to main agent
+     * Top up the balance by transferring XRP to the main agent.
+     * Creates a Payment transaction, signs it, and submits it.
      */
-    public async topUpBalance(
-        mainAgentAddress: string,
-        amount: number
-    ): Promise<TransactionResponse> {
-        if (!this.isInstalled() || !this.connected) {
+    public async topUpBalance(mainAgentAddress: string, amount: number): Promise<TransactionResponse> {
+        if (!this.connected || !this.address) {
             throw new Error('Crossmark wallet is not connected');
         }
-
         try {
-            // Create a Payment transaction
             const payment = {
                 TransactionType: "Payment",
                 Account: this.address,
                 Destination: mainAgentAddress,
-                Amount: String(Math.floor(amount * 1000000)), // Convert to drops
+                Amount: String(Math.floor(amount * 1000000)), // Convert XRP to drops (1 XRP = 1,000,000 drops)
                 Fee: "12"
             };
 
-            // Sign and submit the transaction using Crossmark
-            const result = await window.crossmark!.signAndSubmitTransaction(payment);
+            const result = await this.signAndSubmitTransaction(payment);
+            // Use the meta object directly; check for isSuccess flag.
+            const isSuccess = result.response.data?.meta?.isSuccess === true;
 
-            // Create a transaction record
+            // Optionally, also check if there is a transaction hash.
+            const txHash = result.response.data?.meta?.TransactionHash || "";
+
             const transaction = {
                 id: `crossmark-tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-                from: this.address || 'crossmark-wallet',
+                from: this.address,
                 to: 'main-agent',
                 amount,
                 currency: 'XRP',
                 timestamp: new Date().toISOString(),
-                status: result.result?.meta?.TransactionResult === 'tesSUCCESS' ? 'confirmed' : 'failed' as TransactionStatus,
+                status: isSuccess ? 'confirmed' as TransactionStatus : 'failed' as TransactionStatus,
                 type: 'payment' as TransactionType,
-                xrpTxHash: result.result?.hash || '',
-                ledgerIndex: result.result?.ledger_index,
+                xrpTxHash: txHash,
+                ledgerIndex: result.response.data?.ledger_index, // may be undefined
                 memo: 'Top up from Crossmark wallet'
             };
 
             return {
                 transaction,
-                success: result.result?.meta?.TransactionResult === 'tesSUCCESS',
+                success: isSuccess,
                 ledgerResponse: result
             };
-        } catch (error) {
-            console.error('Failed to top up balance from Crossmark wallet:', error);
 
-            // Create a failed transaction record
+        } catch (error) {
             const transaction = {
                 id: `crossmark-tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
                 from: this.address || 'crossmark-wallet',
@@ -175,7 +143,6 @@ export class CrossmarkClient {
                 type: 'payment' as TransactionType,
                 memo: 'Failed top up from Crossmark wallet'
             };
-
             return {
                 transaction,
                 success: false,
@@ -184,43 +151,8 @@ export class CrossmarkClient {
         }
     }
 
-    /**
-     * Subscribe to Crossmark events
-     */
-    public subscribeToEvents(
-        onConnectChange: (connected: boolean) => void,
-        onBalanceChange: (balances: { xrp: number;[key: string]: number }) => void
-    ): void {
-        if (!this.isInstalled()) return;
-
-        const handleConnectionChange = async () => {
-            const connected = await this.isConnected();
-            onConnectChange(connected);
-        };
-
-        const handleBalanceChange = async (balances: { xrp: number;[key: string]: number }) => {
-            onBalanceChange(balances);
-        };
-
-        // Set up event listeners
-        window.crossmark!.on('connectionChange', handleConnectionChange);
-        window.crossmark!.on('balanceChange', handleBalanceChange);
-    }
-
-    /**
-     * Unsubscribe from Crossmark events
-     */
-    public unsubscribeFromEvents(
-        onConnectChange: (connected: boolean) => void,
-        onBalanceChange: (balances: { xrp: number;[key: string]: number }) => void
-    ): void {
-        if (!this.isInstalled()) return;
-
-        window.crossmark!.off('connectionChange', onConnectChange);
-        window.crossmark!.off('balanceChange', onBalanceChange);
-    }
 }
 
-// Export singleton instance
+// Export a singleton instance.
 const crossmarkClient = CrossmarkClient.getInstance();
 export default crossmarkClient;

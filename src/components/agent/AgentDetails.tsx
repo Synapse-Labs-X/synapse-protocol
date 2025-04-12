@@ -16,7 +16,7 @@ import {
 import { Agent, AgentType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
 import { formatCurrency } from "@/lib/utils/formatters";
-import TransactionButton from "./TransactionButton";
+import TransactionButton from "../transactions/TransactionButton";
 
 interface AgentDetailsProps {
   agent: Agent;

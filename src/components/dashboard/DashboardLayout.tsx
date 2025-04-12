@@ -12,11 +12,11 @@ import {
 import { formatCurrency } from "@/lib/utils/formatters";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
-import AgentNetwork from "@/components/dashboard/AgentNetwork";
-import TransactionHistory from "@/components/dashboard/TransactionHistory";
-import AgentDetails from "@/components/dashboard/AgentDetails";
-import PromptInput from "@/components/dashboard/PromptInput";
-import StatusBar from "@/components/dashboard/StatusBar";
+import AgentNetwork from "@/components/network/AgentNetwork";
+import TransactionHistory from "@/components/transactions/TransactionHistory";
+import AgentDetails from "@/components/agent/AgentDetails";
+import PromptInput from "@/components/agent/PromptInput";
+import StatusBar from "@/components/layout/StatusBar";
 
 interface EnhancedDashboardProps {
   network: AgentNetworkType;

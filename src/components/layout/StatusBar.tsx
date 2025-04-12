@@ -1,18 +1,12 @@
+"use client";
+
 import React, { useState } from "react";
 import Image from "next/image";
-import {
-  Database,
-  FileText,
-  Server,
-  X,
-  Wallet,
-  Check,
-  AlertCircle,
-} from "lucide-react";
+import { Database, FileText, Server, X, Shield, Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
-import StatusBarMenu from "./StatusBarMenu";
-import WalletStatusIndicator from "./WalletStatusIndicator";
-import TopUpButton from "./TopUpButton";
+import StatusBarMenu from "../layout/StatusBarMenu";
+import UserWalletButton from "../wallet/UserWalletButton";
+import WalletStatusIndicator from "../wallet/WalletStatusIndicator";
 import { Agent } from "@/types/agent";
 
 interface StatusBarProps {
@@ -22,12 +16,12 @@ interface StatusBarProps {
   mainAgent?: Agent;
   agents?: Agent[];
   onTransactionComplete?: () => void;
+  onBalanceUpdate?: (amount: number) => void;
   walletStatus?: {
     initialized: string[];
     pending: string[];
     failed: string[];
   };
-  onBalanceUpdate?: (amount: number) => void;
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({
@@ -37,22 +31,22 @@ const StatusBar: React.FC<StatusBarProps> = ({
   mainAgent,
   agents = [],
   onTransactionComplete,
-  walletStatus,
   onBalanceUpdate,
+  walletStatus,
 }) => {
   const [showWalletModal, setShowWalletModal] = useState(false);
 
-  // Calculate wallet statistics for the indicator
-  const initializedCount = walletStatus?.initialized.length || 0;
-  const totalCount = agents.length;
-  const hasFailures = (walletStatus?.failed.length || 0) > 0;
-
-  // Handle balance update from TopUpButton
+  // Handle balance update from UserWalletButton
   const handleBalanceUpdate = (amount: number) => {
     if (onBalanceUpdate) {
       onBalanceUpdate(amount);
     }
   };
+
+  // Calculate wallet statistics for the indicator
+  const initializedCount = walletStatus?.initialized.length || 0;
+  const totalCount = agents.length;
+  const hasFailures = (walletStatus?.failed.length || 0) > 0;
 
   return (
     <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
@@ -104,8 +98,8 @@ const StatusBar: React.FC<StatusBarProps> = ({
           </div>
         </div>
 
-        {/* Add TopUpButton before the StatusBarMenu */}
-        <TopUpButton
+        {/* User Wallet Button - consolidated component */}
+        <UserWalletButton
           onBalanceUpdate={handleBalanceUpdate}
           currentBalance={balance}
         />
@@ -153,7 +147,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
               {walletStatus.initialized.length > 0 && (
                 <div>
                   <h4 className="text-green-400 flex items-center text-sm font-medium mb-2">
-                    <Check size={16} className="mr-1" /> Initialized Wallets
+                    <Shield size={16} className="mr-1" /> Initialized Wallets
                   </h4>
                   <div className="bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto">
                     <div className="space-y-1">
@@ -207,7 +201,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
               {walletStatus.failed.length > 0 && (
                 <div>
                   <h4 className="text-red-400 flex items-center text-sm font-medium mb-2">
-                    <AlertCircle size={16} className="mr-1" /> Failed Wallets
+                    <X size={16} className="mr-1" /> Failed Wallets
                   </h4>
                   <div className="bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto">
                     <div className="space-y-1">

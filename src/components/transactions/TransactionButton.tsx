@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Send } from "lucide-react";
 import { Agent } from "@/types/agent";
-import TransactionModal from "./TransactionModal";
+import TransactionModal from "../transactions/TransactionModal";
 
 interface TransactionButtonProps {
   sourceAgent: Agent;

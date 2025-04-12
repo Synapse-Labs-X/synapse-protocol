@@ -153,33 +153,22 @@ class XrpClient {
     if (cachedWallet) {
       try {
         // Create wallet from seed if available
-        // Note: We use fromSeed to properly handle the format
-        let wallet: Wallet;
-
         if (cachedWallet.seed) {
-          // For XRPL.js v2.x+, we need to prefix 's' for seeds if not already prefixed
-          const seed = cachedWallet.seed.startsWith("s")
-            ? cachedWallet.seed
-            : cachedWallet.seed;
-          wallet = Wallet.fromSeed(seed);
-        } else if (cachedWallet.privateKey) {
-          // Try fallback to private key if seed not available or invalid
-          wallet = Wallet.fromPrivateKey(cachedWallet.privateKey);
-        } else {
-          throw new Error(
-            "Neither seed nor private key available in cached wallet"
-          );
-        }
+          // Try to create the wallet from seed
+          const wallet = Wallet.fromSeed(cachedWallet.seed);
 
-        // Verify the wallet is valid by checking the address
-        if (wallet.address === cachedWallet.address) {
-          console.log(`Loaded wallet for agent ${agentId} from cache`);
-          this.wallets.set(agentId, wallet);
-          return wallet;
+          // Verify the wallet is valid by checking the address
+          if (wallet.address === cachedWallet.address) {
+            console.log(`Loaded wallet for agent ${agentId} from cache`);
+            this.wallets.set(agentId, wallet);
+            return wallet;
+          } else {
+            console.warn(
+              `Cached wallet address mismatch for ${agentId}, creating new wallet`
+            );
+          }
         } else {
-          console.warn(
-            `Cached wallet address mismatch for ${agentId}, creating new wallet`
-          );
+          console.warn(`No seed available for cached wallet ${agentId}`);
         }
       } catch (error) {
         console.error(`Error loading wallet from cache for ${agentId}:`, error);
@@ -200,7 +189,7 @@ class XrpClient {
         await this.initialize();
       } catch (error) {
         console.warn(
-          `Could not initialize XRP client, using fallback mock wallet for ${agentId}`
+          `Could not initialize XRP client, using fallback mock wallet for ${agentId} - error: ${error}`
         );
         return this.createMockWallet(agentId);
       }
@@ -251,33 +240,39 @@ class XrpClient {
    * This ensures the application can still function in demo mode
    */
   private createMockWallet(agentId: string): Wallet {
-    // Generate deterministic mock wallet based on agent ID
-    // This ensures we get the same mock wallet for the same agent across sessions
-    const mockSeed = `s${agentId.replace(/[^a-zA-Z0-9]/g, "")}MockSeedXRPL`;
-    const mockAddress = `r${agentId.replace(
-      /[^a-zA-Z0-9]/g,
-      ""
-    )}MockAddressXRPL`;
+    try {
+      // First, try to generate a real wallet without funding
+      const wallet = Wallet.generate();
+      console.log(`Created mock wallet for agent ${agentId} (unfunded)`);
+      return wallet;
+    } catch (error) {
+      console.error(
+        `Failed to generate wallet for mock usage, creating minimal mock:`,
+        error
+      );
 
-    // Create a minimal wallet object with just the properties we need
-    const mockWallet = {
-      address: mockAddress,
-      seed: mockSeed,
-      publicKey: `PUBLIC_KEY_${agentId}`,
-      privateKey: `PRIVATE_KEY_${agentId}`,
-      classicAddress: mockAddress,
-      sign: () => ({ tx_blob: "MOCK_SIGNED_TX" }),
-    } as unknown as Wallet;
+      // If even wallet generation fails, create a minimal mock object
+      // Generate deterministic mock data based on agent ID
+      const mockSeed = `s${agentId.replace(/[^a-zA-Z0-9]/g, "")}MockSeedXRPL`;
+      const mockAddress = `r${agentId.replace(
+        /[^a-zA-Z0-9]/g,
+        ""
+      )}MockAddressXRPL`;
 
-    // Store in memory
-    this.wallets.set(agentId, mockWallet);
+      // Create a minimal wallet object - compatible with your XRPL version
+      const mockWallet = {
+        address: mockAddress,
+        seed: mockSeed,
+        publicKey: `${mockAddress}PUB`,
+        classicAddress: mockAddress,
+        sign: () => ({ tx_blob: "MOCK_SIGNED_TX" }),
+      } as unknown as Wallet;
 
-    // Don't cache mock wallets to avoid polluting the cache
-
-    console.log(
-      `Created mock wallet for agent ${agentId} (for testing/fallback)`
-    );
-    return mockWallet;
+      console.log(
+        `Created minimal mock wallet for agent ${agentId} (for testing/fallback)`
+      );
+      return mockWallet;
+    }
   }
 
   /**
@@ -387,42 +382,32 @@ class XrpClient {
 
           let wallet: Wallet | null = null;
 
-          // Try to create wallet from seed first
+          // Try to create wallet from seed
           if (walletData.seed) {
             try {
-              // For XRPL.js v2.x+, we need to prefix 's' for seeds if not already prefixed
-              const seed = walletData.seed.startsWith("s")
-                ? walletData.seed
-                : walletData.seed;
-              wallet = Wallet.fromSeed(seed);
+              // Use the appropriate method to create wallet from seed
+              wallet = Wallet.fromSeed(walletData.seed);
+
+              // Verify the wallet address matches
+              if (wallet.address === walletData.address) {
+                this.wallets.set(agentId, wallet);
+                successCount++;
+                console.log(
+                  `Successfully restored wallet for ${agentId} from cache`
+                );
+              } else {
+                console.warn(
+                  `Address mismatch for cached wallet ${agentId}: ${wallet.address} !== ${walletData.address}`
+                );
+              }
             } catch (seedError) {
               console.warn(
                 `Failed to create wallet from seed for ${agentId}:`,
                 seedError
               );
             }
-          }
-
-          // Fallback to private key if seed failed
-          if (!wallet && walletData.privateKey) {
-            try {
-              wallet = Wallet.fromPrivateKey(walletData.privateKey);
-            } catch (pkError) {
-              console.warn(
-                `Failed to create wallet from private key for ${agentId}:`,
-                pkError
-              );
-            }
-          }
-
-          // Verify the wallet address matches
-          if (wallet && wallet.address === walletData.address) {
-            this.wallets.set(agentId, wallet);
-            successCount++;
-          } else if (wallet) {
-            console.warn(
-              `Address mismatch for cached wallet ${agentId}: ${wallet.address} !== ${walletData.address}`
-            );
+          } else {
+            console.warn(`No seed available for cached wallet ${agentId}`);
           }
         } catch (err) {
           console.error(`Error loading wallet for ${agentId}:`, err);
@@ -597,6 +582,29 @@ class XrpClient {
       return dropsToXrp(result.result.Fee);
     } catch (error) {
       console.error("Error parsing transaction fee:", error);
+      return 0;
+    }
+  }
+
+  // Get balance for a specific wallet address by querying account_info.
+  public async getBalanceByAddress(address: string): Promise<number> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    try {
+      const accountInfo = await this.client.request({
+        command: "account_info",
+        account: address,
+        ledger_index: "validated"
+      });
+      const drops = accountInfo?.result?.account_data?.Balance;
+      if (drops) {
+        // Convert drops (string) to XRP
+        return dropsToXrp(drops);
+      }
+      return 0;
+    } catch (error) {
+      console.error(`Failed to get balance for address ${address}:`, error);
       return 0;
     }
   }

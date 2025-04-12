@@ -1,5 +1,3 @@
-// src/app/dashboard/page.tsx - Updated with wallet caching
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -9,9 +7,10 @@ import { analyzePrompt } from "@/lib/agents/analysis";
 import { executeTransactions } from "@/lib/agents/orchestrator";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import ClientSideOnly from "@/components/ClientSideOnly";
-import WalletInitialization from "@/components/dashboard/WalletInitialization";
+import WalletInitialization from "@/components/wallet/WalletInitialization";
 import walletInitService from "@/lib/xrp/walletInitService";
 import transactionService from "@/lib/xrp/transactionService";
+import walletService from "@/lib/wallet/walletService";
 import Image from "next/image";
 
 export default function DashboardPage() {
@@ -34,20 +33,23 @@ export default function DashboardPage() {
     initialized: string[];
     pending: string[];
     failed: string[];
-    cached: string[]; // Added cached property
+    cached: string[]; // Track which wallets were loaded from cache
     progress: number;
   }>({
     initialized: [],
     pending: [],
     failed: [],
-    cached: [], // Track which wallets were loaded from cache
+    cached: [],
     progress: 0,
   });
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
 
-  // Set mounted state
+  // Set mounted state and initialize wallet service
   useEffect(() => {
     setHasMounted(true);
+
+    // Initialize the wallet service
+    walletService.initialize().catch(console.error);
   }, []);
 
   // Initialize network data
@@ -55,7 +57,8 @@ export default function DashboardPage() {
     if (!hasMounted) return;
 
     // Simulate loading delay with a modern loading animation
-    const loadTimer = setTimeout(() => {
+    const loadTimer = setTimeout(async () => {
+      const walletAddress = await walletService.getWalletAddress();
       const initialNodes: Agent[] = [
         {
           id: "main-agent",
@@ -64,7 +67,7 @@ export default function DashboardPage() {
           balance: 995,
           cost: 0,
           status: "active",
-          walletAddress: "rMainAgentAddressHere123456789", // Wallet address for Crossmark integration
+          walletAddress: walletAddress || undefined, // Convert null to undefined
         },
         {
           id: "text-gen-1",
@@ -171,8 +174,6 @@ export default function DashboardPage() {
   // Initialize all agent wallets on page load
   const initializeWallets = async (agents: Agent[]) => {
     setInitializing(true);
-
-    // Start with all agents pending
     setInitProgress({
       initialized: [],
       pending: agents.map((agent) => agent.id),
@@ -182,81 +183,32 @@ export default function DashboardPage() {
     });
 
     try {
-      // Use a manual approach to track initializations
-      let currentProgress = { ...initProgress };
-      let initComplete = false;
-
-      // Start the wallet initialization with caching support
-      const initPromise = walletInitService.initializeAllWallets(agents);
-
-      // Poll for progress updates
-      const intervalId = setInterval(() => {
+      // Initialize wallets in batches
+      const intervalId = setInterval(async () => {
         const progress = walletInitService.getInitializationProgress();
-
-        // Update our state with the latest progress
         setInitProgress(progress);
-        currentProgress = progress;
 
-        // Check if initialization is complete (no more pending wallets)
-        if (progress.pending.length === 0 && !initComplete) {
-          initComplete = true;
+        // When all wallets are initialized or we've handled all failures, finish loading
+        if (progress.pending.length === 0) {
           clearInterval(intervalId);
 
-          // Mark initialized wallets in transaction service for faster operations
+          // Create trustlines for agents that need them
+          await walletInitService.createTrustlinesForAgents(
+            progress.initialized.filter((id) => id !== "main-agent")
+          );
+
+          // Mark the initialized wallets in the transaction service
           transactionService.markWalletsAsInitialized(progress.initialized);
 
-          // Create trustlines for initialized wallets (except main agent)
-          walletInitService
-            .createTrustlinesForAgents(
-              progress.initialized.filter((id) => id !== "main-agent")
-            )
-            .then(() => {
-              // After trustlines are set up, we can move to the dashboard
-              setTimeout(() => {
-                setInitializing(false);
-                setIsLoading(false);
-              }, 1000);
-            })
-            .catch((err) => {
-              console.error("Failed to create trustlines:", err);
-              // Still proceed to dashboard even if trustlines fail
-              setTimeout(() => {
-                setInitializing(false);
-                setIsLoading(false);
-              }, 1000);
-            });
+          setTimeout(() => {
+            setInitializing(false);
+            setIsLoading(false);
+          }, 1000);
         }
       }, 500);
 
-      // Wait for the initialization to complete or timeout after 30 seconds
-      const timeoutPromise = new Promise<void>((_, reject) => {
-        setTimeout(() => {
-          if (!initComplete) {
-            reject(new Error("Wallet initialization timed out"));
-          }
-        }, 30000); // 30 second timeout
-      });
-
-      try {
-        // Wait for either initialization to complete or timeout
-        await Promise.race([initPromise, timeoutPromise]);
-      } catch (error) {
-        console.error("Wallet initialization failed or timed out:", error);
-        clearInterval(intervalId);
-
-        // If we have any initialized wallets, we can still proceed
-        if (currentProgress.initialized.length > 0) {
-          transactionService.markWalletsAsInitialized(
-            currentProgress.initialized
-          );
-        }
-
-        // Proceed to dashboard with whatever wallets we have
-        setTimeout(() => {
-          setInitializing(false);
-          setIsLoading(false);
-        }, 1000);
-      }
+      // Start the actual wallet initialization
+      walletInitService.initializeAllWallets(agents);
     } catch (error) {
       console.error("Failed to initialize wallets:", error);
       // Even on error, proceed to the dashboard but with limited functionality
@@ -423,7 +375,7 @@ export default function DashboardPage() {
     setTransactions((prev) => [...prev]);
   };
 
-  // Handler for balance updates from Crossmark wallet
+  // Handler for balance updates from user wallet
   const handleBalanceUpdate = (amount: number) => {
     // Update main agent balance
     setBalance((prevBalance) => prevBalance + amount);
@@ -448,33 +400,22 @@ export default function DashboardPage() {
 
     // Create a new transaction record for the top-up
     const topUpTransaction: Transaction = {
-      id: `crossmark-topup-${Date.now()}`,
-      from: "crossmark-wallet",
+      id: `user-topup-${Date.now()}`,
+      from: "user-wallet",
       to: "main-agent",
       amount: amount,
-      currency: "RLUSD",
+      currency: "XRP",
       timestamp: new Date().toISOString(),
       status: "confirmed",
       type: "payment",
-      memo: "Top up from Crossmark wallet",
+      memo: "Top up from user wallet",
     };
 
     // Add the transaction to the list
     setTransactions((prev) => [topUpTransaction, ...prev].slice(0, 50));
   };
 
-  // Add handler to reset wallet caches (for testing purposes)
-  const handleResetWalletCaches = () => {
-    // Only for development/testing
-    if (process.env.NODE_ENV === "development") {
-      walletInitService.clearWalletCaches();
-      alert(
-        "Wallet caches cleared. Refresh the page to re-initialize wallets."
-      );
-    }
-  };
-
-  // Show enhanced loading state while initializing
+  // Show loading state while initializing
   if (!hasMounted || isLoading) {
     return (
       <div className="h-screen bg-gradient-futuristic flex flex-col items-center justify-center">
@@ -608,18 +549,6 @@ export default function DashboardPage() {
           failed: initProgress.failed,
         }}
       />
-
-      {/* Hidden dev tools for testing - only visible in development */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-4 right-4 opacity-50 hover:opacity-100 transition-opacity">
-          <button
-            onClick={handleResetWalletCaches}
-            className="bg-red-900/50 text-red-400 text-xs px-2 py-1 rounded-md border border-red-800/30"
-          >
-            Reset Wallet Caches (Dev Only)
-          </button>
-        </div>
-      )}
     </ClientSideOnly>
   );
 }
