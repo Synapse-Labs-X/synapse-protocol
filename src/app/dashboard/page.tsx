@@ -10,8 +10,14 @@ import WalletInitialization from "@/components/wallet/WalletInitialization";
 import walletInitService from "@/lib/xrp/walletInitService";
 import transactionService from "@/lib/xrp/transactionService";
 import walletService from "@/lib/wallet/walletService";
+import { analyzePrompt } from "@/lib/agents/analysis";
 import Image from "next/image";
 import { socketManager } from "@/lib/utils/socket";
+import TaskResultModal from "@/components/task/TaskResultModal";
+import {
+  waitForRunCompletion,
+  extractAgentInfo,
+} from "@/lib/utils/crewAISocket";
 
 export default function DashboardPage() {
   // State management
@@ -21,12 +27,19 @@ export default function DashboardPage() {
   });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
   const [processing, setProcessing] = useState<boolean>(false);
   const [balance, setBalance] = useState<number>(995); // Starting balance
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasMounted, setHasMounted] = useState<boolean>(false);
+
+  // Task result state
+  const [showTaskResult, setShowTaskResult] = useState<boolean>(false);
+  const [taskResult, setTaskResult] = useState<string>("");
+  const [taskPrompt, setTaskPrompt] = useState<string>("");
+  const [taskAgents, setTaskAgents] = useState<string[]>([]);
+  const [taskCost, setTaskCost] = useState<number>(0);
+
   // Wallet initialization states
   const [initializing, setInitializing] = useState<boolean>(false);
   const [initProgress, setInitProgress] = useState<{
@@ -171,6 +184,7 @@ export default function DashboardPage() {
     return () => clearTimeout(loadTimer);
   }, [hasMounted]);
 
+  // Set up socket listeners for CrewAI communication
   useEffect(() => {
     const socket = socketManager.connect();
 
@@ -191,21 +205,6 @@ export default function DashboardPage() {
         console.log("Type:", data.type);
         console.log("Run ID:", data.run_id);
         console.log("Data:", data.data);
-        console.groupEnd();
-      }
-    );
-
-    // Final results
-    socket.on(
-      "run_complete",
-      (data: { status: any; run_id: any; error: any; final_result: any }) => {
-        console.group("[CrewAI] Run Completed");
-        console.log("Status:", data.status);
-        console.log("Run ID:", data.run_id);
-        if (data.error) {
-          console.error("Error:", data.error);
-        }
-        console.log("Final Result:", data.final_result);
         console.groupEnd();
       }
     );
@@ -281,6 +280,27 @@ export default function DashboardPage() {
     console.log("[Dashboard] Submitting task:", promptText);
 
     try {
+      // First, update the UI to show the agents are processing
+      const agentsToUse = await analyzePromptAndSelectAgents(promptText);
+
+      // Set selected agents for visualization
+      setSelectedAgents(agentsToUse);
+
+      // Store the prompt for the result modal
+      setTaskPrompt(promptText);
+
+      // Update network state to show processing status
+      setNetwork((prevNetwork) => {
+        const updatedNodes = prevNetwork.nodes.map((node) => {
+          if (agentsToUse.some((agent) => agent.id === node.id)) {
+            return { ...node, status: "processing" };
+          }
+          return node;
+        });
+        return { ...prevNetwork, nodes: updatedNodes };
+      });
+
+      // Start CrewAI task
       const response = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -302,18 +322,227 @@ export default function DashboardPage() {
       const { run_id } = await response.json();
       console.log("[Dashboard] Task started with Run ID:", run_id);
 
-      const socket = socketManager.getSocket();
-      socket.emit("join_room", { run_id });
-      console.log("[Dashboard] Joined WebSocket room for run:", run_id);
+      // Wait for the run to complete using our helper
+      const result = await waitForRunCompletion(run_id);
+      console.log("[Dashboard] Task completed:", result);
+
+      // Process the result and create transactions
+      if (result.status === "success" && result.final_result) {
+        const agentHierarchy = result.final_result.agent_hierarchy || [];
+        const agentUsage = result.final_result.agent_token_usage || {};
+
+        // Create transactions based on agent usage
+        const newTransactions: Transaction[] = [];
+        const agentNamesUsed: string[] = [];
+        let totalCost = 0;
+
+        // Create a transaction for each agent in the hierarchy
+        agentHierarchy.forEach((hierarchyAgent: any) => {
+          const agentName = hierarchyAgent.agent_name || "";
+          const agent = findAgentByName(agentName);
+
+          if (agent) {
+            const cost = agent.cost;
+            totalCost += cost;
+
+            newTransactions.push({
+              id: `tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+              from: "main-agent",
+              to: agent.id,
+              amount: cost,
+              currency: "RLUSD",
+              timestamp: new Date().toISOString(),
+              status: "confirmed",
+              type: "payment",
+              memo: `Payment for processing task: "${promptText.substring(
+                0,
+                30
+              )}${promptText.length > 30 ? "..." : ""}"`,
+            });
+
+            agentNamesUsed.push(agent.name);
+          }
+        });
+
+        // If no transactions were created but we have agent usage, create transactions from that
+        if (
+          newTransactions.length === 0 &&
+          Object.keys(agentUsage).length > 0
+        ) {
+          Object.entries(agentUsage).forEach(([agentName, usage]) => {
+            const agent = findAgentByName(agentName);
+
+            if (agent) {
+              const cost = agent.cost;
+              totalCost += cost;
+
+              newTransactions.push({
+                id: `tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+                from: "main-agent",
+                to: agent.id,
+                amount: cost,
+                currency: "RLUSD",
+                timestamp: new Date().toISOString(),
+                status: "confirmed",
+                type: "payment",
+                memo: `Payment for processing task: "${promptText.substring(
+                  0,
+                  30
+                )}${promptText.length > 30 ? "..." : ""}"`,
+              });
+
+              agentNamesUsed.push(agent.name);
+            }
+          });
+        }
+
+        // If still no transactions, create one for the default agent
+        if (newTransactions.length === 0) {
+          const defaultAgent = network.nodes.find(
+            (node) => node.id === "text-gen-1"
+          );
+          if (defaultAgent) {
+            const cost = defaultAgent.cost;
+            totalCost = cost;
+
+            newTransactions.push({
+              id: `tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+              from: "main-agent",
+              to: defaultAgent.id,
+              amount: cost,
+              currency: "RLUSD",
+              timestamp: new Date().toISOString(),
+              status: "confirmed",
+              type: "payment",
+              memo: `Payment for processing task: "${promptText.substring(
+                0,
+                30
+              )}${promptText.length > 30 ? "..." : ""}"`,
+            });
+
+            agentNamesUsed.push(defaultAgent.name);
+          }
+        }
+
+        // Add transactions to state
+        setTransactions((prev) => [...newTransactions, ...prev]);
+
+        // Update network with transactions
+        updateNetwork(
+          newTransactions.map((tx) => tx.to),
+          newTransactions
+        );
+
+        // Update main agent balance
+        setBalance((prev) => prev - totalCost);
+
+        // Store result information for modal
+        setTaskResult(
+          result.final_result.final_output || "Task completed successfully!"
+        );
+        setTaskAgents(agentNamesUsed);
+        setTaskCost(totalCost);
+
+        // Show the task result modal
+        setShowTaskResult(true);
+      }
     } catch (error) {
       console.error("[Dashboard] Submission error:", error);
     } finally {
+      // Reset agent status
+      resetAgentStatus();
       setProcessing(false);
     }
   };
 
+  // Analyze the prompt and determine which agents to use
+  const analyzePromptAndSelectAgents = async (promptText: string) => {
+    try {
+      // Use existing analysis function
+      const result = await analyzePrompt(promptText);
+
+      // Map selected agent IDs to actual agent objects
+      const selectedAgents = result.selectedAgents
+        .map((id) => network.nodes.find((node) => node.id === id))
+        .filter((agent) => agent !== undefined) as Agent[];
+
+      // If no agents were found, default to text-gen-1
+      if (selectedAgents.length === 0) {
+        const defaultAgent = network.nodes.find(
+          (node) => node.id === "text-gen-1"
+        );
+        if (defaultAgent) {
+          selectedAgents.push(defaultAgent);
+        }
+      }
+
+      return selectedAgents;
+    } catch (error) {
+      console.error("Error analyzing prompt:", error);
+      // Default to text-gen-1 if analysis fails
+      const defaultAgent = network.nodes.find(
+        (node) => node.id === "text-gen-1"
+      );
+      return defaultAgent ? [defaultAgent] : [];
+    }
+  };
+
+  // Find an agent by name
+  const findAgentByName = (name: string): Agent | undefined => {
+    // Try direct match first
+    let agent = network.nodes.find(
+      (node) => node.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (agent) return agent;
+
+    // Try to match by removing spaces in agent name
+    const normalizedName = name.replace(/\s+/g, "").toLowerCase();
+
+    agent = network.nodes.find((node) => {
+      const nodeName = node.name.replace(/\s+/g, "").toLowerCase();
+      return nodeName === normalizedName;
+    });
+
+    if (agent) return agent;
+
+    // Try to match by substring
+    agent = network.nodes.find((node) =>
+      node.name.toLowerCase().includes(name.toLowerCase())
+    );
+
+    if (agent) return agent;
+
+    // Map specific agent names from the API to our network
+    const nameMapping: Record<string, string> = {
+      "agent 1": "text-gen-1",
+      "agent 2": "data-analyzer",
+      "agent 3": "research-assistant",
+      "agent 4": "summarizer",
+    };
+
+    const mappedId = nameMapping[name.toLowerCase()];
+    if (mappedId) {
+      return network.nodes.find((node) => node.id === mappedId);
+    }
+
+    return undefined;
+  };
+
+  // Reset agent status after task completion or error
+  const resetAgentStatus = () => {
+    setNetwork((prevNetwork) => {
+      const updatedNodes = prevNetwork.nodes.map((node) => {
+        if (node.status === "processing") {
+          return { ...node, status: "active" };
+        }
+        return node;
+      });
+      return { ...prevNetwork, nodes: updatedNodes };
+    });
+  };
+
   // Update network data with new transactions
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const updateNetwork = (
     agentIds: string[],
     newTransactions: Transaction[]
@@ -333,6 +562,7 @@ export default function DashboardPage() {
           return {
             ...node,
             balance: node.balance + receivedAmount,
+            status: "active", // Reset processing status
           };
         }
         return node;
@@ -345,10 +575,7 @@ export default function DashboardPage() {
         const target =
           typeof link.target === "object" ? link.target.id : link.target;
 
-        if (
-          (source === "main-agent" && agentIds.includes(target)) ||
-          (target === "main-agent" && agentIds.includes(source))
-        ) {
+        if (source === "main-agent" && agentIds.includes(target)) {
           return {
             ...link,
             value: (link.value as number) + 1,
@@ -536,6 +763,19 @@ export default function DashboardPage() {
           agentNames={agentNames}
         />
       )}
+
+      {/* Show task result modal when available */}
+      {showTaskResult && (
+        <TaskResultModal
+          isOpen={showTaskResult}
+          onClose={() => setShowTaskResult(false)}
+          result={taskResult}
+          promptText={taskPrompt}
+          usedAgents={taskAgents}
+          totalCost={taskCost}
+        />
+      )}
+
       <DashboardLayout
         network={network}
         transactions={transactions}
