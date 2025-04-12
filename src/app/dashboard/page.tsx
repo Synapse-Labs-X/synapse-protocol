@@ -286,17 +286,6 @@ export default function DashboardPage() {
       // Store the prompt for the result modal
       setTaskPrompt(promptText);
 
-      // Update network state to show processing status
-      setNetwork((prevNetwork) => {
-        const updatedNodes = prevNetwork.nodes.map((node) => {
-          if (agentsToUse.some((agent) => agent.id === node.id)) {
-            return { ...node, status: "processing" as const };
-          }
-          return node;
-        });
-        return { ...prevNetwork, nodes: updatedNodes };
-      });
-
       // Start CrewAI task
       const response = await fetch("/api/run", {
         method: "POST",
@@ -323,133 +312,188 @@ export default function DashboardPage() {
       const result = await waitForRunCompletion(run_id);
       console.log("[Dashboard] Task completed:", result);
 
-      // Process the result and create transactions
+      // Process the result
       if (result.status === "success" && result.final_result) {
         const agentHierarchy = result.final_result.agent_hierarchy || [];
-        const agentUsage = result.final_result.agent_token_usage || {};
 
-        // Create transactions based on agent usage
-        const newTransactions: Transaction[] = [];
-        const agentNamesUsed: string[] = [];
-        let totalCost = 0;
-
-        // Create a transaction for each agent in the hierarchy
-        agentHierarchy.forEach((hierarchyAgent: any) => {
-          const agentName = hierarchyAgent.agent_name || "";
-          const agent = findAgentByName(agentName);
-
-          if (agent) {
-            const cost = agent.cost;
-            totalCost += cost;
-
-            newTransactions.push({
-              id: `tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-              from: "main-agent",
-              to: agent.id,
-              amount: cost,
-              currency: "RLUSD",
-              timestamp: new Date().toISOString(),
-              status: "confirmed",
-              type: "payment",
-              memo: `Payment for processing task: "${promptText.substring(
-                0,
-                30
-              )}${promptText.length > 30 ? "..." : ""}"`,
-            });
-
-            agentNamesUsed.push(agent.name);
-          }
-        });
-
-        // If no transactions were created but we have agent usage, create transactions from that
-        if (
-          newTransactions.length === 0 &&
-          Object.keys(agentUsage).length > 0
-        ) {
-          Object.entries(agentUsage).forEach(([agentName]) => {
-            const agent = findAgentByName(agentName);
-
-            if (agent) {
-              const cost = agent.cost;
-              totalCost += cost;
-
-              newTransactions.push({
-                id: `tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-                from: "main-agent",
-                to: agent.id,
-                amount: cost,
-                currency: "RLUSD",
-                timestamp: new Date().toISOString(),
-                status: "confirmed",
-                type: "payment",
-                memo: `Payment for processing task: "${promptText.substring(
-                  0,
-                  30
-                )}${promptText.length > 30 ? "..." : ""}"`,
-              });
-
-              agentNamesUsed.push(agent.name);
-            }
-          });
+        // Get the main agent
+        const mainAgent = network.nodes.find(
+          (node) => node.id === "main-agent"
+        );
+        if (!mainAgent) {
+          throw new Error("Main agent not found in network");
         }
 
-        // If still no transactions, create one for the default agent
-        if (newTransactions.length === 0) {
-          const defaultAgent = network.nodes.find(
-            (node) => node.id === "text-gen-1"
-          );
-          if (defaultAgent) {
-            const cost = defaultAgent.cost;
-            totalCost = cost;
+        // Create sequential agent chain
+        const agentChain = createAgentChain(
+          promptText,
+          agentHierarchy,
+          mainAgent,
+          network
+        );
 
-            newTransactions.push({
-              id: `tx-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-              from: "main-agent",
-              to: defaultAgent.id,
-              amount: cost,
-              currency: "RLUSD",
-              timestamp: new Date().toISOString(),
-              status: "confirmed",
-              type: "payment",
-              memo: `Payment for processing task: "${promptText.substring(
-                0,
-                30
-              )}${promptText.length > 30 ? "..." : ""}"`,
-            });
+        console.log(
+          "[Dashboard] Agent chain created:",
+          agentChain.map((a: { name: any }) => a.name).join(" -> ")
+        );
 
-            agentNamesUsed.push(defaultAgent.name);
-          }
-        }
-
-        // Add transactions to state
-        setTransactions((prev) => [...newTransactions, ...prev]);
-
-        // Update network with transactions
-        updateNetwork(
-          newTransactions.map((tx) => tx.to),
-          newTransactions
+        // Process chain sequentially
+        const { totalCost, agentNames } = await processAgentChainSequentially(
+          agentChain,
+          promptText
         );
 
         // Update main agent balance
         setBalance((prev) => prev - totalCost);
 
-        // Store result information for modal
+        // Store result information
         setTaskResult(
           result.final_result.final_output || "Task completed successfully!"
         );
-        setTaskAgents(agentNamesUsed);
+        setTaskAgents(agentNames);
         setTaskCost(totalCost);
 
-        // Show the task result modal
-        setShowTaskResult(true);
+        // Show the task result modal after a short delay
+        setTimeout(() => {
+          setShowTaskResult(true);
+        }, 1000);
       }
     } catch (error) {
       console.error("[Dashboard] Submission error:", error);
-    } finally {
-      // Reset agent status
+
+      // Reset the network status
       resetAgentStatus();
+    } finally {
       setProcessing(false);
     }
+  };
+
+  const updateNetworkWithTransaction = (transaction: Transaction) => {
+    setNetwork((prevNetwork) => {
+      // First, mark all previously processing agents as active
+      const updatedNodes = [...prevNetwork.nodes].map((node) => {
+        // Update nodes with new balances
+        if (node.id === transaction.from) {
+          return {
+            ...node,
+            balance: node.balance - transaction.amount,
+            status: "active" as const, // Set sender to active
+          };
+        } else if (node.id === transaction.to) {
+          return {
+            ...node,
+            balance: node.balance + transaction.amount,
+            status: "processing" as const, // Set receiver to processing
+          };
+        } else if (node.status === "processing") {
+          // Reset any other processing agents to active
+          return {
+            ...node,
+            status: "active" as const,
+          };
+        }
+        return node;
+      });
+
+      // Update or create the link between these agents
+      let updatedLinks = [...prevNetwork.links];
+
+      // Find if this link already exists
+      const existingLinkIndex = updatedLinks.findIndex((link) => {
+        const source =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const target =
+          typeof link.target === "object" ? link.target.id : link.target;
+        return source === transaction.from && target === transaction.to;
+      });
+
+      if (existingLinkIndex >= 0) {
+        // Update existing link
+        updatedLinks[existingLinkIndex] = {
+          ...updatedLinks[existingLinkIndex],
+          value: (updatedLinks[existingLinkIndex].value as number) + 1,
+          // Add an active flag for styling
+        };
+
+        // Deactivate other links
+        updatedLinks = updatedLinks.map((link, idx) =>
+          idx !== existingLinkIndex ? { ...link, active: false } : link
+        );
+      } else {
+        // Create new link
+        // First deactivate all links
+        updatedLinks = updatedLinks.map((link) => ({ ...link, active: false }));
+
+        // Then add new active link
+        updatedLinks.push({
+          source: transaction.from,
+          target: transaction.to,
+          value: 1,
+        });
+      }
+
+      return {
+        nodes: updatedNodes,
+        links: updatedLinks,
+      };
+    });
+  };
+
+  const processAgentChainSequentially = async (
+    chain: Agent[],
+    promptText: string
+  ): Promise<{
+    transactions: Transaction[];
+    totalCost: number;
+    agentNames: string[];
+  }> => {
+    const transactions: Transaction[] = [];
+    const agentNames: string[] = [];
+    let totalCost = 0;
+
+    // Process each agent in sequence
+    for (let i = 0; i < chain.length - 1; i++) {
+      const fromAgent = chain[i];
+      const toAgent = chain[i + 1];
+
+      // Skip if trying to send to self (shouldn't happen in proper chain)
+      if (fromAgent.id === toAgent.id) continue;
+
+      // Create transaction object
+      const transaction: Transaction = {
+        id: `tx-${Date.now()}-${Math.floor(Math.random() * 10000)}-${i}`,
+        from: fromAgent.id,
+        to: toAgent.id,
+        amount: toAgent.cost,
+        currency: "RLUSD",
+        timestamp: new Date(Date.now() + i * 1000).toISOString(), // Sequential timestamps
+        status: "confirmed",
+        type: "payment",
+        memo: `Step ${i + 1}/${
+          chain.length - 1
+        } of processing task: "${promptText.substring(0, 30)}${
+          promptText.length > 30 ? "..." : ""
+        }"`,
+      };
+
+      transactions.push(transaction);
+      totalCost += toAgent.cost;
+
+      if (!agentNames.includes(toAgent.name)) {
+        agentNames.push(toAgent.name);
+      }
+
+      // Add transaction to UI
+      setTransactions((prev) => [transaction, ...prev]);
+
+      // Update network visualization
+      updateNetworkWithTransaction(transaction);
+
+      // Add delay between transactions for visual effect
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    }
+
+    return { transactions, totalCost, agentNames };
   };
 
   // Analyze the prompt and determine which agents to use
@@ -524,6 +568,110 @@ export default function DashboardPage() {
     }
 
     return undefined;
+  };
+
+  const createAgentChain = (
+    promptText: string,
+    hierarchyData: any[],
+    mainAgent: Agent,
+    network: AgentNetworkType
+  ): Agent[] => {
+    // Step 1: Start with the main agent
+    const chain: Agent[] = [mainAgent];
+
+    // Step 2: Use hierarchy data if available
+    if (hierarchyData && hierarchyData.length > 0) {
+      // Sort by level if available
+      const sortedHierarchy = [...hierarchyData].sort(
+        (a, b) => (a.level || 0) - (b.level || 0)
+      );
+
+      // Map agent names to actual agents
+      for (const hierarchyAgent of sortedHierarchy) {
+        const name = hierarchyAgent.agent_name;
+        const agent = findAgentByName(name);
+        if (agent && !chain.includes(agent)) {
+          chain.push(agent);
+        }
+      }
+    }
+
+    // Step 3: If hierarchy didn't produce a chain, infer based on prompt
+    if (chain.length <= 1) {
+      // Example: Simple context-based chaining
+
+      // Some example logic to determine a sequence
+      // Note: This should be customized based on your specific use case
+
+      // Example: Data analysis followed by summarization
+      if (
+        promptText.toLowerCase().includes("analyze") ||
+        promptText.toLowerCase().includes("data")
+      ) {
+        const dataAnalyzer = network.nodes.find(
+          (n) => n.id === "data-analyzer"
+        );
+        if (dataAnalyzer) chain.push(dataAnalyzer);
+
+        if (
+          promptText.toLowerCase().includes("summary") ||
+          promptText.toLowerCase().includes("summarize")
+        ) {
+          const summarizer = network.nodes.find((n) => n.id === "summarizer");
+          if (summarizer) chain.push(summarizer);
+        }
+      }
+      // Translation chain
+      else if (promptText.toLowerCase().includes("translate")) {
+        const textGen = network.nodes.find((n) => n.id === "text-gen-1");
+        if (textGen) chain.push(textGen);
+
+        const translator = network.nodes.find((n) => n.id === "translator");
+        if (translator) chain.push(translator);
+      }
+      // Code generation chain
+      else if (
+        promptText.toLowerCase().includes("code") ||
+        promptText.toLowerCase().includes("program")
+      ) {
+        const researchAssistant = network.nodes.find(
+          (n) => n.id === "research-assistant"
+        );
+        if (researchAssistant) chain.push(researchAssistant);
+
+        const codeGenerator = network.nodes.find(
+          (n) => n.id === "code-generator"
+        );
+        if (codeGenerator) chain.push(codeGenerator);
+      }
+      // Image generation chain
+      else if (
+        promptText.toLowerCase().includes("image") ||
+        promptText.toLowerCase().includes("picture") ||
+        promptText.toLowerCase().includes("visual")
+      ) {
+        const textGen = network.nodes.find((n) => n.id === "text-gen-1");
+        if (textGen) chain.push(textGen);
+
+        const imageGen = network.nodes.find((n) => n.id === "image-gen-1");
+        if (imageGen) chain.push(imageGen);
+      }
+      // Default to text-gen-1 if no specific pattern is found
+      else {
+        const textGen = network.nodes.find((n) => n.id === "text-gen-1");
+        if (textGen) chain.push(textGen);
+      }
+    }
+
+    // Always ensure we have at least one agent in the chain besides the main agent
+    if (chain.length <= 1) {
+      const defaultAgent = network.nodes.find((n) => n.id === "text-gen-1");
+      if (defaultAgent && !chain.includes(defaultAgent)) {
+        chain.push(defaultAgent);
+      }
+    }
+
+    return chain;
   };
 
   // Reset agent status after task completion or error
