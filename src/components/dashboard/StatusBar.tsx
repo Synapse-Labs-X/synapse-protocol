@@ -1,5 +1,6 @@
 import React from "react";
-import { Zap, Database, FileText, Server } from "lucide-react";
+import Image from "next/image";
+import { Database, FileText, Server } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
 import StatusBarMenu from "./StatusBarMenu";
 import { Agent } from "@/types/agent";
@@ -24,7 +25,13 @@ const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
       <div className="flex items-center">
-        <Zap size={24} className="text-yellow-400 mr-2" />
+        <Image
+          src="/synapse-logo.png"
+          alt="Synapse Logo"
+          width={24}
+          height={24}
+          className="mr-2"
+        />
         <h1 className="text-xl font-bold">Synapse</h1>
         <span className="ml-2 text-gray-400 hidden sm:inline">
           Decentralized Agent Payment Protocol

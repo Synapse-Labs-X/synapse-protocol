@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import AgentNetwork from "@/components/dashboard/AgentNetwork"; // Import our enhanced component
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
@@ -10,7 +11,6 @@ import PromptInput from "@/components/dashboard/PromptInput";
 import TransactionHistory from "@/components/dashboard/TransactionHistory";
 import { analyzePrompt } from "@/lib/agents/analysis";
 import { executeTransactions } from "@/lib/agents/orchestrator";
-import { Zap } from "lucide-react";
 
 export default function DashboardPage() {
   // State management
@@ -294,7 +294,13 @@ export default function DashboardPage() {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
-          <Zap size={36} className="text-yellow-400 mx-auto mb-4" />
+          <Image
+            src="/synapse-logo.png"
+            alt="Synapse Logo"
+            width={48}
+            height={48}
+            className="mx-auto mb-4"
+          />
           <div className="w-16 h-16 border-t-4 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
           <p className="mt-4 text-white">Loading Synapse Dashboard...</p>
         </div>
