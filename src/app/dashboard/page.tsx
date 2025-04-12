@@ -295,7 +295,7 @@ export default function DashboardPage() {
   // Show enhanced loading state while initializing
   if (!hasMounted || isLoading) {
     return (
-      <div className="h-screen bg-gray-900 flex flex-col items-center justify-center">
+      <div className="h-screen bg-gradient-futuristic flex flex-col items-center justify-center">
         <div className="relative">
           {/* Animated logo */}
           <div className="relative flex items-center justify-center w-20 h-20 mb-6 mx-auto">
