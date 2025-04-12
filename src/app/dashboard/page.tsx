@@ -688,53 +688,6 @@ export default function DashboardPage() {
   };
 
   // Update network data with new transactions
-  const updateNetwork = (
-    agentIds: string[],
-    newTransactions: Transaction[]
-  ) => {
-    setNetwork((prevNetwork) => {
-      // Update nodes with new balances
-      const updatedNodes = [...prevNetwork.nodes].map((node) => {
-        if (node.id === "main-agent") {
-          return {
-            ...node,
-            balance:
-              balance - newTransactions.reduce((sum, tx) => sum + tx.amount, 0),
-          };
-        } else if (agentIds.includes(node.id)) {
-          const receivedAmount =
-            newTransactions.find((tx) => tx.to === node.id)?.amount || 0;
-          return {
-            ...node,
-            balance: node.balance + receivedAmount,
-            status: "active" as const, // Reset processing status
-          };
-        }
-        return node;
-      });
-
-      // Update links with new transaction values
-      const updatedLinks = [...prevNetwork.links].map((link) => {
-        const source =
-          typeof link.source === "object" ? link.source.id : link.source;
-        const target =
-          typeof link.target === "object" ? link.target.id : link.target;
-
-        if (source === "main-agent" && agentIds.includes(target)) {
-          return {
-            ...link,
-            value: (link.value as number) + 1,
-          };
-        }
-        return link;
-      });
-
-      return {
-        nodes: updatedNodes,
-        links: updatedLinks,
-      };
-    });
-  };
 
   // Handler for agent selection
   const handleAgentSelect = (agent: Agent) => {

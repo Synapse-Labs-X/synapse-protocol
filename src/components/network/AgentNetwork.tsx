@@ -33,6 +33,8 @@ interface GraphLink {
   source: string | GraphNode;
   target: string | GraphNode;
   value: number;
+  active?: boolean; // Flag for active transactions
+  returnToMain?: boolean; // Flag to indicate if this link returns to the main node
   index?: number;
 }
 
@@ -136,30 +138,29 @@ const AgentNetwork = ({
 
     // Clone the nodes and calculate positions for a fixed layout
     const nodes: GraphNode[] = network.nodes.map((node) => {
-      // For main agent, fixed position at the center top
+      // For main agent, fixed position at the center
       if (node.id === "main-agent") {
         return {
           ...node,
           fx: dimensions.width / 2, // Center horizontally
-          fy: dimensions.height * 0.2, // Fixed position near the top (20% from top)
+          fy: dimensions.height / 2, // Center vertically
         };
       }
 
-      // For other nodes, pre-calculate positions in a semi-circle at the bottom
+      // For other nodes, pre-calculate positions in a circle around main agent
       const otherNodes = network.nodes.filter((n) => n.id !== "main-agent");
       const indexOfNode = otherNodes.findIndex((n) => n.id === node.id);
 
       if (indexOfNode !== -1) {
         const totalNodes = otherNodes.length;
-        const angleStep = Math.PI / Math.max(1, totalNodes - 1); // Avoid division by zero
+        const angleStep = (2 * Math.PI) / totalNodes; // Full circle for even distribution
         const angle = indexOfNode * angleStep;
 
-        // Calculate position in a semi-circle
-        const radiusX = Math.min(dimensions.width, dimensions.height) * 0.8; // Use 30% of smaller dimension for better layout
-        const radiusY = Math.min(dimensions.width, dimensions.height) * 0.5; // Use 30% of smaller dimension for better layout
+        // Calculate position in a circle
+        const radius = Math.min(dimensions.width, dimensions.height) * 0.35; // Use 35% of smaller dimension for better layout
 
-        const x = dimensions.width / 2 + radiusX * Math.cos(angle);
-        const y = dimensions.height * 0.7 + radiusY * Math.sin(angle);
+        const x = dimensions.width / 2 + radius * Math.cos(angle);
+        const y = dimensions.height / 2 + radius * Math.sin(angle);
 
         return {
           ...node,
@@ -180,36 +181,136 @@ const AgentNetwork = ({
         source: typeof link.source === "string" ? link.source : link.source.id,
         target: typeof link.target === "string" ? link.target : link.target.id,
         value: link.value || 1,
+        active: link.active || false,
+        returnToMain: link.returnToMain || false,
       });
     });
 
-    // Add any missing connections to make it all-to-all
-    nodes.forEach((sourceNode) => {
-      nodes.forEach((targetNode) => {
-        if (sourceNode.id !== targetNode.id) {
-          // Check if this connection already exists
-          const connectionExists = allLinks.some(
+    // Always ensure main agent is connected to all other agents
+    const mainAgentId = nodes.find((n) => n.id === "main-agent")?.id;
+    if (mainAgentId) {
+      nodes.forEach((node) => {
+        if (node.id !== mainAgentId) {
+          // Check if connection already exists from main to this node
+          const mainToNodeExists = allLinks.some(
             (link) =>
-              (getNodeId(link.source) === sourceNode.id &&
-                getNodeId(link.target) === targetNode.id) ||
-              (getNodeId(link.source) === targetNode.id &&
-                getNodeId(link.target) === sourceNode.id)
+              getNodeId(link.source) === mainAgentId &&
+              getNodeId(link.target) === node.id
           );
 
-          if (!connectionExists) {
+          // Check if connection already exists from this node back to main
+          const nodeToMainExists = allLinks.some(
+            (link) =>
+              getNodeId(link.source) === node.id &&
+              getNodeId(link.target) === mainAgentId
+          );
+
+          // Add main-to-node link if it doesn't exist
+          if (!mainToNodeExists) {
             allLinks.push({
-              source: sourceNode.id,
-              target: targetNode.id,
-              value: 0.2, // Lower value for unused connections
+              source: mainAgentId,
+              target: node.id,
+              value: 0.5, // Lower value for default connections
+              active: false,
+            });
+          }
+
+          // Add node-to-main link if it doesn't exist (for return path)
+          if (!nodeToMainExists) {
+            allLinks.push({
+              source: node.id,
+              target: mainAgentId,
+              value: 0.2, // Even lower value for return paths initially
+              active: false,
+              returnToMain: true, // Mark as return path to main
             });
           }
         }
       });
-    });
+    }
+
+    // Add connections between agents based on their interactions
+    if (selectedAgents.length > 1) {
+      // Create a chain of links between selected agents in sequence
+      for (let i = 0; i < selectedAgents.length - 1; i++) {
+        const source = selectedAgents[i];
+        const target = selectedAgents[i + 1];
+
+        // Skip if it's the same node
+        if (source === target) continue;
+
+        // Check if link already exists in this direction
+        const linkExists = allLinks.some(
+          (link) =>
+            getNodeId(link.source) === source &&
+            getNodeId(link.target) === target
+        );
+
+        if (!linkExists) {
+          allLinks.push({
+            source,
+            target,
+            value: 1,
+            active: processingTransaction, // Active if currently processing
+          });
+        } else {
+          // Update existing link to be active
+          const linkIndex = allLinks.findIndex(
+            (link) =>
+              getNodeId(link.source) === source &&
+              getNodeId(link.target) === target
+          );
+          if (linkIndex >= 0) {
+            allLinks[linkIndex] = {
+              ...allLinks[linkIndex],
+              value: Math.max(1, (allLinks[linkIndex].value || 0) + 0.5),
+              active: processingTransaction,
+            };
+          }
+        }
+      }
+
+      // Add return link from last selected agent back to main agent
+      if (selectedAgents.length > 0 && mainAgentId) {
+        const lastAgent = selectedAgents[selectedAgents.length - 1];
+
+        // Check if link already exists
+        const returnLinkExists = allLinks.some(
+          (link) =>
+            getNodeId(link.source) === lastAgent &&
+            getNodeId(link.target) === mainAgentId
+        );
+
+        if (!returnLinkExists) {
+          allLinks.push({
+            source: lastAgent,
+            target: mainAgentId,
+            value: 1,
+            active: processingTransaction,
+            returnToMain: true,
+          });
+        } else {
+          // Update existing return link to be active
+          const linkIndex = allLinks.findIndex(
+            (link) =>
+              getNodeId(link.source) === lastAgent &&
+              getNodeId(link.target) === mainAgentId
+          );
+          if (linkIndex >= 0) {
+            allLinks[linkIndex] = {
+              ...allLinks[linkIndex],
+              value: Math.max(1, (allLinks[linkIndex].value || 0) + 0.5),
+              active: processingTransaction,
+              returnToMain: true,
+            };
+          }
+        }
+      }
+    }
 
     setGraphData({ nodes, links: allLinks });
     setNeedsZooming(true);
-  }, [network, hasMounted, dimensions]);
+  }, [network, hasMounted, dimensions, selectedAgents, processingTransaction]);
 
   // Center the graph whenever needed
   useEffect(() => {
@@ -232,7 +333,7 @@ const AgentNetwork = ({
     assistant: { color: "#6B48FF", glowColor: "#7C4DFF" },
   };
 
-  // Extract node id safely
+  // Extract node id safely - improved to handle all edge cases
   const getNodeId = (
     node: string | GraphNode | number | { id?: string | number } | undefined
   ): string => {
@@ -253,6 +354,60 @@ const AgentNetwork = ({
       }, 300);
     }
   }, [graphData.nodes.length]);
+
+  // Check if a link is part of an active transaction
+  const isLinkActive = (link: any): boolean => {
+    // Directly check the active flag
+    if (link.active) return true;
+
+    // If processing transactions, check for links in the selected agent chain
+    if (processingTransaction && selectedAgents.length > 1) {
+      const source = getNodeId(link.source);
+      const target = getNodeId(link.target);
+
+      // Check if this link is part of the chain
+      for (let i = 0; i < selectedAgents.length - 1; i++) {
+        if (source === selectedAgents[i] && target === selectedAgents[i + 1]) {
+          return true;
+        }
+      }
+
+      // Check if this is the return link to main
+      if (link.returnToMain) {
+        const lastSelectedAgent = selectedAgents[selectedAgents.length - 1];
+        const mainAgent = graphData.nodes.find((n) => n.id === "main-agent");
+
+        if (source === lastSelectedAgent && target === mainAgent?.id) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  // Get the flow direction for particles
+  const getLinkParticleFlow = (
+    link: GraphLink
+  ): { count: number; speed: number } => {
+    // Default values
+    // const defaultFlow = { count: 0, speed: 0.002 };
+
+    // If link is not active, base flow on link value
+    if (!isLinkActive(link)) {
+      const value = (link.value || 0) as number;
+      return {
+        count: value > 0.5 ? Math.min(Math.ceil(value), 3) : 0,
+        speed: 0.002,
+      };
+    }
+
+    // For active links, return high particle count and speed
+    return {
+      count: 6, // More particles for active links
+      speed: 0.005, // Faster for active links
+    };
+  };
 
   // Custom node rendering function
   const nodeCanvasObject = (
@@ -395,6 +550,21 @@ const AgentNetwork = ({
       .padStart(2, "0")}${newB.toString(16).padStart(2, "0")}`;
   };
 
+  // Get color for a node based on its type
+  const getNodeColor = (nodeId: string): string => {
+    const node = graphData.nodes.find((n) => n.id === nodeId);
+    if (node && node.type) {
+      return agentStyles[node.type]?.glowColor || "#FFFFFF";
+    }
+    return "#FFFFFF";
+  };
+
+  // Handler for node click
+  const handleNodeClick = (node: any) => {
+    const graphNode = node as GraphNode;
+    onNodeClick(graphNode);
+  };
+
   // Show a loading placeholder if not mounted yet
   if (!hasMounted) {
     return (
@@ -409,12 +579,6 @@ const AgentNetwork = ({
       </div>
     );
   }
-
-  // Handle node click with proper type conversion
-  const handleNodeClick = (node: any) => {
-    const graphNode = node as GraphNode;
-    onNodeClick(graphNode);
-  };
 
   return (
     <div ref={containerRef} className="w-full h-full relative">
@@ -522,116 +686,93 @@ const AgentNetwork = ({
               ctx.fill();
             }}
             nodeRelSize={10}
+            // Link styling
             linkWidth={(link) => {
-              const source = getNodeId(link.source);
-              const target = getNodeId(link.target);
+              const active = isLinkActive(link);
 
-              // Highlight links involved in active transactions
-              if (
-                processingTransaction &&
-                ((source === "main-agent" && selectedAgents.includes(target)) ||
-                  (target === "main-agent" && selectedAgents.includes(source)))
-              ) {
-                return 2;
+              // Thicker lines for active links
+              if (active) {
+                // Special styling for return links
+                if ((link as GraphLink).returnToMain) {
+                  return 3; // Thickest for return links
+                }
+                return 2.5; // Thick for active links
               }
 
-              // Base width on value
-              return 0.5;
+              // Base width on value with min/max limits
+              const value = (link.value || 0) as number;
+              return Math.max(0.3, Math.min(value * 0.5, 1.5));
             }}
-            linkColor={(link) => {
-              const source = getNodeId(link.source);
-              const target = getNodeId(link.target);
+            linkColor={(link: any) => {
+              const active = isLinkActive(link);
 
-              // Get target node color for the link
-              const targetNode = graphData.nodes.find(
-                (n) => n.id === target
-              ) as GraphNode;
+              // For active links, use more vibrant colors
+              if (active) {
+                const source = getNodeId(link.source);
+                const target = getNodeId(link.target);
 
-              if (
-                processingTransaction &&
-                ((source === "main-agent" && selectedAgents.includes(target)) ||
-                  (target === "main-agent" && selectedAgents.includes(source)))
-              ) {
-                // Bright link for active transactions
-                return targetNode && targetNode.type
-                  ? agentStyles[targetNode.type]?.glowColor || "#FFFFFF"
-                  : "#FFFFFF";
+                // Special color for return links
+                if (link.returnToMain) {
+                  // Combine source color with main agent color
+                  const sourceColor = getNodeColor(source);
+                  return sourceColor;
+                }
+
+                // Use target node's color for the link
+                return getNodeColor(target);
               }
 
-              // Semi-transparent link for regular connections
-              return "rgba(80, 80, 255, 0.8)";
+              // Default color with varying opacity based on value
+              const value = (link.value || 0) as number;
+              const opacity = Math.max(0.2, Math.min(value * 0.5, 0.6));
+              return `rgba(80, 80, 255, ${opacity})`;
             }}
             onNodeClick={handleNodeClick}
             cooldownTicks={50} // Limited cooling for stability
             d3AlphaDecay={0.02} // Slower decay for more stable positioning
             d3VelocityDecay={0.2} // Lower value for smoother movement
-            linkDirectionalParticles={(link) => {
-              const source = getNodeId(link.source);
-              const target = getNodeId(link.target);
-              const value = link.value as number;
-
-              // Show particles for active transactions
-              if (
-                processingTransaction &&
-                source === "main-agent" &&
-                selectedAgents.includes(target)
-              ) {
-                return 6; // More particles for active transactions
-              }
-
-              // Show fewer particles for regular connections based on value
-              return value > 0.5 ? Math.min(Math.ceil(value), 3) : 0;
+            linkDirectionalParticles={(link: any) => {
+              return getLinkParticleFlow(link).count;
             }}
-            linkDirectionalParticleSpeed={(link) => {
-              const source = getNodeId(link.source);
-              const target = getNodeId(link.target);
-
-              if (
-                processingTransaction &&
-                source === "main-agent" &&
-                selectedAgents.includes(target)
-              ) {
-                return 0.005; // Faster particles for active transactions
-              }
-
-              return 0.002; // Regular speed
+            linkDirectionalParticleSpeed={(link: any) => {
+              return getLinkParticleFlow(link).speed;
             }}
-            linkDirectionalParticleWidth={(link) => {
-              const source = getNodeId(link.source);
-              const target = getNodeId(link.target);
-
-              if (
-                processingTransaction &&
-                source === "main-agent" &&
-                selectedAgents.includes(target)
-              ) {
-                return 8; // Larger particles for active transactions
-              }
-
-              return 2; // Regular size
+            linkDirectionalParticleWidth={(link: any) => {
+              // Particle size based on whether link is active
+              return isLinkActive(link) ? 6 : 2;
             }}
-            linkDirectionalParticleColor={(link) => {
-              const source = getNodeId(link.source);
-              const target = getNodeId(link.target);
+            linkDirectionalParticleColor={(link: any) => {
+              if (isLinkActive(link)) {
+                const source = getNodeId(link.source);
+                const target = getNodeId(link.target);
 
-              if (
-                processingTransaction &&
-                source === "main-agent" &&
-                selectedAgents.includes(target)
-              ) {
-                // Get target node color for transaction particles
-                const targetNode = graphData.nodes.find(
-                  (n) => n.id === target
-                ) as GraphNode;
-                if (targetNode && targetNode.type) {
-                  return agentStyles[targetNode.type]?.glowColor || "#FFE066";
+                // For return links, use source color
+                if (link.returnToMain) {
+                  return getNodeColor(source);
                 }
-                return "#FFE066"; // Default to yellow if node not found
+
+                // For regular links, use target color
+                return getNodeColor(target);
               }
 
-              return "#FFFFFF33"; // Semi-transparent white for regular particles
+              // Default particle color for inactive links
+              return "rgba(255, 255, 255, 0.4)";
             }}
-            backgroundColor="rgba(15, 23, 42, 0)" // Transparent background to show our custom background
+            backgroundColor="rgba(15, 23, 42, 0)" // Transparent background
+            linkDirectionalArrowLength={(link) => (isLinkActive(link) ? 6 : 0)} // Show arrows for active links
+            linkDirectionalArrowRelPos={0.7} // Position arrows closer to target
+            linkDirectionalArrowColor={(link) => {
+              if (isLinkActive(link)) {
+                const target = getNodeId(link.target);
+                return getNodeColor(target);
+              }
+              return "rgba(80, 80, 255, 0.5)";
+            }}
+            linkCurvature={(link) => {
+              // Add a slight curve to links for better visibility
+              // More curve for return links to main
+              return link.returnToMain ? 0.3 : 0.1;
+            }}
             onEngineStop={() => {
               // When the simulation stops, ensure we're centered properly
               if (graphRef.current) {

@@ -17,10 +17,11 @@ export interface Agent {
 
 // For force-directed graph compatibility
 export interface AgentLink {
-  source: string | { id: string;[key: string]: unknown };
-  target: string | { id: string;[key: string]: unknown };
-  value: number;
-  lastTransaction?: string;
+  source: string | Agent;
+  target: string | Agent;
+  value?: number;
+  active?: boolean;
+  returnToMain?: boolean;
 }
 
 export interface AgentNetwork {
