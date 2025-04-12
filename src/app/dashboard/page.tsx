@@ -20,6 +20,7 @@ import {
   waitForRunCompletion,
   extractAgentInfo,
 } from "@/lib/utils/crewAISocket";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 
 // Log update type definition for CrewAI WebSocket logs
 interface CrewAILogUpdate {
@@ -31,6 +32,7 @@ interface CrewAILogUpdate {
 
 export default function DashboardPage() {
   // State management
+  const isMobile = useIsMobile();
   const [network, setNetwork] = useState<AgentNetworkType>({
     nodes: [],
     links: [],
@@ -72,7 +74,7 @@ export default function DashboardPage() {
     setHasMounted(true);
 
     // Initialize the wallet service
-    walletService.initialize().catch(console.error);
+    if (!isMobile) walletService.initialize().catch(console.error);
 
     // Initialize the socket connection
     initializeSocketConnection();
@@ -178,7 +180,9 @@ export default function DashboardPage() {
 
     // Simulate loading delay with a modern loading animation
     const loadTimer = setTimeout(async () => {
-      const walletAddress = await walletService.getWalletAddress();
+      var walletAddress = "";
+      if (!isMobile)
+        walletAddress = (await walletService.getWalletAddress()) || "";
       const initialNodes: Agent[] = [
         {
           id: "main-agent",
@@ -1089,6 +1093,7 @@ export default function DashboardPage() {
           pending: initProgress.pending,
           failed: initProgress.failed,
         }}
+        isMobile={isMobile} // Pass mobile flag to layout
       />
     </ClientSideOnly>
   );

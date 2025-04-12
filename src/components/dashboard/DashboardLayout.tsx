@@ -35,6 +35,7 @@ interface EnhancedDashboardProps {
     failed: string[];
   };
   onBalanceUpdate: (amount: number) => void;
+  isMobile?: boolean;
 }
 
 // Dashboard component with enhanced UI
@@ -51,6 +52,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
   onTransactionComplete,
   walletStatus,
   onBalanceUpdate,
+  isMobile = false,
 }) => {
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [showGlowEffects, setShowGlowEffects] = useState<boolean>(false);
@@ -92,6 +94,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           onTransactionComplete={onTransactionComplete}
           onBalanceUpdate={onBalanceUpdate}
           walletStatus={walletStatus}
+          hideCrossmark={isMobile}
         />
 
         {/* Mobile toggle button */}
