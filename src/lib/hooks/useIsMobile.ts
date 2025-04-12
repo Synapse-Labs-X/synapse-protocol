@@ -12,6 +12,7 @@ export function useIsMobile() {
       const isTouchDevice =
         "ontouchstart" in window ||
         navigator.maxTouchPoints > 0 ||
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (navigator as any).msMaxTouchPoints > 0;
 
       // Check for mobile user agent as backup detection method
