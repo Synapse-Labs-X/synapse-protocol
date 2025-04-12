@@ -23,6 +23,7 @@ interface StatusBarProps {
     pending: string[];
     failed: string[];
   };
+  hideCrossmark?: boolean;
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({
@@ -34,6 +35,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
   onTransactionComplete,
   onBalanceUpdate,
   walletStatus,
+  hideCrossmark = false,
 }) => {
   const [showWalletModal, setShowWalletModal] = useState(false);
 

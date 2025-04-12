@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Wallet } from "lucide-react";
 import walletService from "@/lib/wallet/walletService";
 import UserWalletModal from "./UserWalletModal";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
 
 interface UserWalletButtonProps {
   onBalanceUpdate: (amount: number) => void;
@@ -20,8 +21,11 @@ const UserWalletButton: React.FC<UserWalletButtonProps> = ({
   >(null);
   const [showModal, setShowModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
+    console.log(isMobile);
+    if (isMobile) return;
     const checkWallet = async () => {
       await walletService.initialize();
       setIsCrossmarkInstalled(walletService.isCrossmarkInstalled());
