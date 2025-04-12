@@ -1,3 +1,5 @@
+// src/lib/xrp/walletInitService.ts
+
 import XrpClient from "./client";
 import { Agent } from "@/types/agent";
 
@@ -6,6 +8,7 @@ interface WalletInitProgress {
   pending: string[];
   failed: string[];
   progress: number;
+  cached: string[]; // New field to track which wallets were loaded from cache
 }
 
 /**
@@ -18,6 +21,7 @@ class WalletInitService {
     initialized: [],
     pending: [],
     failed: [],
+    cached: [],
     progress: 0,
   };
 
@@ -47,6 +51,7 @@ class WalletInitService {
       initialized: [],
       pending: agents.map((agent) => agent.id),
       failed: [],
+      cached: [],
       progress: 0,
     };
 
@@ -54,10 +59,30 @@ class WalletInitService {
       // First connect to the XRP Ledger
       await this.client.initialize();
 
+      // Check which wallets are already cached
+      const cachedAgents = agents.filter((agent) =>
+        this.client.isWalletCached(agent.id)
+      );
+
+      // Set the cached agents
+      this.initProgress.cached = cachedAgents.map((agent) => agent.id);
+
+      // Mark cached agents as initialized immediately, but still continue with verification
+      for (const agent of cachedAgents) {
+        const index = this.initProgress.pending.indexOf(agent.id);
+        if (index !== -1) {
+          this.initProgress.pending.splice(index, 1);
+          this.initProgress.initialized.push(agent.id);
+        }
+      }
+
+      // Update progress
+      this.updateProgress(agents.length);
+
       // Process all agents truly in parallel - no batching
       const initPromises = agents.map(async (agent) => {
         try {
-          // Get or create wallet for agent
+          // Get or create wallet for agent - will use cache if available
           const wallet = await this.client.getWallet(agent.id);
 
           // Track successful initialization
@@ -65,6 +90,7 @@ class WalletInitService {
             success: true,
             agentId: agent.id,
             wallet,
+            cached: this.initProgress.cached.includes(agent.id),
           };
         } catch (error) {
           console.error(`Failed to initialize wallet for ${agent.id}:`, error);
@@ -74,6 +100,7 @@ class WalletInitService {
             success: false,
             agentId: agent.id,
             error,
+            cached: false,
           };
         }
       });
@@ -83,6 +110,14 @@ class WalletInitService {
 
       // Process results
       for (const result of results) {
+        // If already processed as cached, skip
+        if (
+          this.initProgress.initialized.includes(result.agentId) &&
+          result.cached
+        ) {
+          continue;
+        }
+
         // Remove from pending
         this.initProgress.pending = this.initProgress.pending.filter(
           (id) => id !== result.agentId
@@ -91,17 +126,17 @@ class WalletInitService {
         if (result.success) {
           this.initProgress.initialized.push(result.agentId);
           console.log(
-            `Initialized wallet for ${result.agentId}: ${result.wallet?.address}`
+            `Initialized wallet for ${result.agentId}: ${
+              result.wallet?.address
+            }${result.cached ? " (from cache)" : ""}`
           );
         } else {
           this.initProgress.failed.push(result.agentId);
         }
-      }
 
-      // Update final progress
-      this.initProgress.progress = Math.round(
-        (this.initProgress.initialized.length / agents.length) * 100
-      );
+        // Update progress
+        this.updateProgress(agents.length);
+      }
 
       return this.initProgress;
     } catch (error) {
@@ -110,6 +145,15 @@ class WalletInitService {
     } finally {
       this.isInitializing = false;
     }
+  }
+
+  /**
+   * Update the progress percentage
+   */
+  private updateProgress(totalAgents: number): void {
+    this.initProgress.progress = Math.round(
+      (this.initProgress.initialized.length / totalAgents) * 100
+    );
   }
 
   /**
@@ -214,14 +258,17 @@ class WalletInitService {
   }
 
   /**
-   * Split array into chunks
+   * Clear all wallet caches - useful for testing or resetting
    */
-  private chunkArray<T>(array: T[], chunkSize: number): T[][] {
-    const chunks: T[][] = [];
-    for (let i = 0; i < array.length; i += chunkSize) {
-      chunks.push(array.slice(i, i + chunkSize));
-    }
-    return chunks;
+  public clearWalletCaches(): void {
+    this.client.clearAllWallets();
+  }
+
+  /**
+   * Clear a specific wallet from cache
+   */
+  public clearWalletFromCache(agentId: string): void {
+    this.client.clearWalletFromCache(agentId);
   }
 }
 

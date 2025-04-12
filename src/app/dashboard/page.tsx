@@ -1,3 +1,5 @@
+// src/app/dashboard/page.tsx - Updated with wallet caching
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -32,11 +34,13 @@ export default function DashboardPage() {
     initialized: string[];
     pending: string[];
     failed: string[];
+    cached: string[]; // Added cached property
     progress: number;
   }>({
     initialized: [],
     pending: [],
     failed: [],
+    cached: [], // Track which wallets were loaded from cache
     progress: 0,
   });
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
@@ -167,42 +171,92 @@ export default function DashboardPage() {
   // Initialize all agent wallets on page load
   const initializeWallets = async (agents: Agent[]) => {
     setInitializing(true);
+
+    // Start with all agents pending
     setInitProgress({
       initialized: [],
       pending: agents.map((agent) => agent.id),
       failed: [],
+      cached: [],
       progress: 0,
     });
 
     try {
-      // Initialize wallets in batches
-      const intervalId = setInterval(async () => {
-        const progress = walletInitService.getInitializationProgress();
-        setInitProgress(progress);
+      // Use a manual approach to track initializations
+      let currentProgress = { ...initProgress };
+      let initComplete = false;
 
-        // When all wallets are initialized or we've handled all failures, finish loading
-        if (progress.pending.length === 0) {
+      // Start the wallet initialization with caching support
+      const initPromise = walletInitService.initializeAllWallets(agents);
+
+      // Poll for progress updates
+      const intervalId = setInterval(() => {
+        const progress = walletInitService.getInitializationProgress();
+
+        // Update our state with the latest progress
+        setInitProgress(progress);
+        currentProgress = progress;
+
+        // Check if initialization is complete (no more pending wallets)
+        if (progress.pending.length === 0 && !initComplete) {
+          initComplete = true;
           clearInterval(intervalId);
 
-          // Optional: Create trustlines for agents that need them
-          // This could be moved to a separate step if desired
-          await walletInitService.createTrustlinesForAgents(
-            progress.initialized.filter((id) => id !== "main-agent")
-          );
-
-          // Complete initialization
-          // Mark the initialized wallets in the transaction service
+          // Mark initialized wallets in transaction service for faster operations
           transactionService.markWalletsAsInitialized(progress.initialized);
 
-          setTimeout(() => {
-            setInitializing(false);
-            setIsLoading(false);
-          }, 1000);
+          // Create trustlines for initialized wallets (except main agent)
+          walletInitService
+            .createTrustlinesForAgents(
+              progress.initialized.filter((id) => id !== "main-agent")
+            )
+            .then(() => {
+              // After trustlines are set up, we can move to the dashboard
+              setTimeout(() => {
+                setInitializing(false);
+                setIsLoading(false);
+              }, 1000);
+            })
+            .catch((err) => {
+              console.error("Failed to create trustlines:", err);
+              // Still proceed to dashboard even if trustlines fail
+              setTimeout(() => {
+                setInitializing(false);
+                setIsLoading(false);
+              }, 1000);
+            });
         }
       }, 500);
 
-      // Start the actual wallet initialization
-      walletInitService.initializeAllWallets(agents);
+      // Wait for the initialization to complete or timeout after 30 seconds
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(() => {
+          if (!initComplete) {
+            reject(new Error("Wallet initialization timed out"));
+          }
+        }, 30000); // 30 second timeout
+      });
+
+      try {
+        // Wait for either initialization to complete or timeout
+        await Promise.race([initPromise, timeoutPromise]);
+      } catch (error) {
+        console.error("Wallet initialization failed or timed out:", error);
+        clearInterval(intervalId);
+
+        // If we have any initialized wallets, we can still proceed
+        if (currentProgress.initialized.length > 0) {
+          transactionService.markWalletsAsInitialized(
+            currentProgress.initialized
+          );
+        }
+
+        // Proceed to dashboard with whatever wallets we have
+        setTimeout(() => {
+          setInitializing(false);
+          setIsLoading(false);
+        }, 1000);
+      }
     } catch (error) {
       console.error("Failed to initialize wallets:", error);
       // Even on error, proceed to the dashboard but with limited functionality
@@ -409,6 +463,17 @@ export default function DashboardPage() {
     setTransactions((prev) => [topUpTransaction, ...prev].slice(0, 50));
   };
 
+  // Add handler to reset wallet caches (for testing purposes)
+  const handleResetWalletCaches = () => {
+    // Only for development/testing
+    if (process.env.NODE_ENV === "development") {
+      walletInitService.clearWalletCaches();
+      alert(
+        "Wallet caches cleared. Refresh the page to re-initialize wallets."
+      );
+    }
+  };
+
   // Show enhanced loading state while initializing
   if (!hasMounted || isLoading) {
     return (
@@ -520,6 +585,7 @@ export default function DashboardPage() {
           initialized={initProgress.initialized}
           pending={initProgress.pending}
           failed={initProgress.failed}
+          cached={initProgress.cached}
           progress={initProgress.progress}
           agentNames={agentNames}
         />
@@ -536,7 +602,24 @@ export default function DashboardPage() {
         onPromptSubmit={handleSubmit}
         onTransactionComplete={handleTransactionComplete}
         onBalanceUpdate={handleBalanceUpdate}
+        walletStatus={{
+          initialized: initProgress.initialized,
+          pending: initProgress.pending,
+          failed: initProgress.failed,
+        }}
       />
+
+      {/* Hidden dev tools for testing - only visible in development */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed bottom-4 right-4 opacity-50 hover:opacity-100 transition-opacity">
+          <button
+            onClick={handleResetWalletCaches}
+            className="bg-red-900/50 text-red-400 text-xs px-2 py-1 rounded-md border border-red-800/30"
+          >
+            Reset Wallet Caches (Dev Only)
+          </button>
+        </div>
+      )}
     </ClientSideOnly>
   );
 }

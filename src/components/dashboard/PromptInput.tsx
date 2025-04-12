@@ -29,6 +29,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
   const [prompt, setPrompt] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [isHovered, setIsHovered] = useState<boolean>(false);
+  const [isFocused, setIsFocused] = useState<boolean>(false);
   const [animateSubmit, setAnimateSubmit] = useState<boolean>(false);
   const [showAgentSelector, setShowAgentSelector] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -91,11 +92,17 @@ const PromptInput: React.FC<PromptInputProps> = ({
   return (
     <div className="space-y-5">
       <div className="relative flex flex-col">
-        {/* Animated top glow */}
+        {/* Enhanced animated top glow */}
         <div
-          className={`absolute -top-4 left-0 right-0 h-6 bg-gradient-to-b from-blue-500/30 to-transparent transition-opacity duration-700 ${
-            isExpanded || prompt.length > 0 ? "opacity-70" : "opacity-0"
+          className={`absolute -top-4 left-0 right-0 h-8 pointer-events-none transition-opacity duration-700 ${
+            isExpanded || prompt.length > 0 || isFocused
+              ? "opacity-70"
+              : "opacity-0"
           }`}
+          style={{
+            background:
+              "radial-gradient(ellipse at center top, rgba(59, 130, 246, 0.5) 0%, rgba(59, 130, 246, 0.2) 40%, transparent 80%)",
+          }}
         ></div>
 
         <h3 className="text-lg font-bold mb-3 flex items-center gap-2 text-white">
@@ -107,31 +114,60 @@ const PromptInput: React.FC<PromptInputProps> = ({
 
         <div
           className={`relative rounded-xl transition-all duration-300 ${
-            isHovered ? "shadow-[0_0_15px_rgba(59,130,246,0.3)]" : ""
+            isHovered || isFocused
+              ? "shadow-[0_0_20px_rgba(59,130,246,0.35)]"
+              : ""
           }`}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
           <div
-            className={`relative bg-gray-800/70 backdrop-blur-md border ${
-              isHovered ? "border-blue-500/50" : "border-gray-700/50"
-            } rounded-xl overflow-hidden transition-all duration-300`}
+            className={`relative bg-gray-800/70 backdrop-blur-md border rounded-xl overflow-hidden transition-all duration-300 ${
+              isFocused
+                ? "border-blue-500/70"
+                : isHovered
+                ? "border-blue-500/40"
+                : "border-gray-700/50"
+            }`}
           >
-            {/* Text area with glow effect */}
-            <textarea
-              ref={textareaRef}
-              id="prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={() => setIsExpanded(true)}
-              onBlur={() => setIsExpanded(false)}
-              placeholder="Enter a task for the agent network..."
-              className={`bg-transparent px-4 pt-4 pb-12 text-white w-full transition-all duration-300 min-h-[120px] resize-none focus:outline-none`}
-              style={{
-                minHeight: isExpanded ? "180px" : "120px",
-              }}
-            />
+            {/* Enhanced text area with subtle inner glow effect */}
+            <div className="relative">
+              {/* Inner glow container */}
+              <div
+                className={`absolute inset-0 pointer-events-none transition-opacity duration-300 rounded-t-xl ${
+                  isFocused
+                    ? "opacity-30"
+                    : isHovered
+                    ? "opacity-15"
+                    : "opacity-0"
+                }`}
+                style={{
+                  background:
+                    "radial-gradient(circle at center, rgba(59, 130, 246, 0.5) 0%, transparent 70%)",
+                }}
+              ></div>
+
+              <textarea
+                ref={textareaRef}
+                id="prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  setIsExpanded(true);
+                  setIsFocused(true);
+                }}
+                onBlur={() => {
+                  setIsExpanded(false);
+                  setIsFocused(false);
+                }}
+                placeholder="Enter a task for the agent network..."
+                className={`bg-transparent px-4 pt-4 pb-12 text-white w-full transition-all duration-300 min-h-[120px] resize-none focus:outline-none z-10 relative`}
+                style={{
+                  minHeight: isExpanded ? "180px" : "120px",
+                }}
+              />
+            </div>
 
             {/* Bottom actions panel */}
             <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-700/50 bg-gray-800/50 backdrop-blur-sm flex justify-between items-center">
@@ -368,6 +404,16 @@ const PromptInput: React.FC<PromptInputProps> = ({
           }
           100% {
             transform: translateX(100%);
+          }
+        }
+
+        @keyframes pulse {
+          0%,
+          100% {
+            opacity: 0.6;
+          }
+          50% {
+            opacity: 1;
           }
         }
 
