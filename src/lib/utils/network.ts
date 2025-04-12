@@ -48,13 +48,11 @@ export function createNetworkFromAgents(
 
     if (existingLink) {
       existingLink.value = (existingLink.value || 0) + 1;
-      existingLink.lastTransaction = tx.timestamp;
     } else {
       links.push({
         source: tx.from,
         target: tx.to,
         value: 1,
-        lastTransaction: tx.timestamp
       });
     }
   });

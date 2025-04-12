@@ -88,6 +88,7 @@ export const useCrewAiSocket = (props?: UseCrewAiSocketProps) => {
                 error: error instanceof Error ? error : new Error(String(error))
             }));
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.connected, state.connecting]);
 
     // Disconnect from the WebSocket server

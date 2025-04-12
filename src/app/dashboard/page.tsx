@@ -83,7 +83,8 @@ export default function DashboardPage() {
       // Clean up socket connection on unmount
       socketService.disconnect();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
 
   /**
    * Initialize WebSocket connection to the CrewAI backend
@@ -293,7 +294,7 @@ export default function DashboardPage() {
     }, 1500);
 
     return () => clearTimeout(loadTimer);
-  }, [hasMounted]);
+  }, [hasMounted, isMobile]);
 
   // Initialize all agent wallets on page load
   const initializeWallets = async (agents: Agent[]) => {

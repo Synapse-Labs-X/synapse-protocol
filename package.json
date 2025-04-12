@@ -18,10 +18,10 @@
     "react-dom": "^19.0.0",
     "react-force-graph": "^1.47.6",
     "react-force-graph-2d": "^1.27.1",
-    "react-markdown": "^8.0.7",
+    "react-markdown": "^9.0.3",
     "react-syntax-highlighter": "^15.6.1",
-    "rehype-raw": "^6.1.1",
-    "remark-gfm": "^3.0.1",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1",
     "uuid": "^11.1.0",
     "xrpl": "^4.2.0"
