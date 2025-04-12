@@ -14,10 +14,7 @@ import { analyzePrompt } from "@/lib/agents/analysis";
 import Image from "next/image";
 import { socketManager } from "@/lib/utils/socket";
 import TaskResultModal from "@/components/task/TaskResultModal";
-import {
-  waitForRunCompletion,
-  extractAgentInfo,
-} from "@/lib/utils/crewAISocket";
+import { waitForRunCompletion } from "@/lib/utils/crewAISocket";
 
 export default function DashboardPage() {
   // State management
@@ -293,7 +290,7 @@ export default function DashboardPage() {
       setNetwork((prevNetwork) => {
         const updatedNodes = prevNetwork.nodes.map((node) => {
           if (agentsToUse.some((agent) => agent.id === node.id)) {
-            return { ...node, status: "processing" };
+            return { ...node, status: "processing" as const };
           }
           return node;
         });
@@ -369,7 +366,7 @@ export default function DashboardPage() {
           newTransactions.length === 0 &&
           Object.keys(agentUsage).length > 0
         ) {
-          Object.entries(agentUsage).forEach(([agentName, usage]) => {
+          Object.entries(agentUsage).forEach(([agentName]) => {
             const agent = findAgentByName(agentName);
 
             if (agent) {
@@ -534,7 +531,7 @@ export default function DashboardPage() {
     setNetwork((prevNetwork) => {
       const updatedNodes = prevNetwork.nodes.map((node) => {
         if (node.status === "processing") {
-          return { ...node, status: "active" };
+          return { ...node, status: "active" as const };
         }
         return node;
       });
@@ -562,7 +559,7 @@ export default function DashboardPage() {
           return {
             ...node,
             balance: node.balance + receivedAmount,
-            status: "active", // Reset processing status
+            status: "active" as const, // Reset processing status
           };
         }
         return node;

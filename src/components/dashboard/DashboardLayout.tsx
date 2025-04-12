@@ -276,7 +276,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           {/* Right Panel - 4 columns with auto-grid layout for sections */}
           <div className="col-span-4 flex flex-col overflow-hidden bg-gray-800/10">
             {/* Agent Interaction */}
-            <div className="p-4 relative z-10 border-b border-gray-700/50">
+            <div className="p-4 relative border-b border-gray-700/50">
               <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg overflow-hidden transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
                 {showGlowEffects && (
                   <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-70 blur-sm"></div>
