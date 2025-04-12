@@ -280,7 +280,14 @@ const AgentNetwork = ({
 
     setGraphData({ nodes, links: allLinks });
     setNeedsZooming(true);
-  }, [network, hasMounted, dimensions, isMobile, selectedAgents, processingTransaction]);
+  }, [
+    network,
+    hasMounted,
+    dimensions,
+    isMobile,
+    selectedAgents,
+    processingTransaction,
+  ]);
 
   useEffect(() => {
     if (needsZooming && hasMounted && graphData.nodes.length > 0) {
@@ -501,15 +508,6 @@ const AgentNetwork = ({
       .padStart(2, "0")}${newB.toString(16).padStart(2, "0")}`;
   };
 
-  // Get color for a node based on its type
-  const getNodeColor = (nodeId: string): string => {
-    const node = graphData.nodes.find((n) => n.id === nodeId);
-    if (node && node.type) {
-      return agentStyles[node.type]?.glowColor || "#FFFFFF";
-    }
-    return "#FFFFFF";
-  };
-
   // Handler for node click
   const handleNodeClick = (node: any) => {
     const graphNode = node as GraphNode;
@@ -523,17 +521,6 @@ const AgentNetwork = ({
       return agentStyles[node.type]?.glowColor || "#FFFFFF";
     }
     return "#FFFFFF";
-  };
-
-  // Handler for node click
-  const handleNodeClick = (node: any) => {
-    const graphNode = node as GraphNode;
-    onNodeClick(graphNode);
-  };
-
-  const handleNodeClick = (node: any) => {
-    const graphNode = node as GraphNode;
-    onNodeClick(graphNode);
   };
 
   if (!hasMounted) {
@@ -698,7 +685,7 @@ const AgentNetwork = ({
               return `rgba(80, 80, 255, ${opacity})`;
             }}
             onNodeClick={handleNodeClick}
-            cooldownTicks={{isMobile ? 30 : 50}} // Limited cooling for stability
+            cooldownTicks={isMobile ? 30 : 50} // Limited cooling for stability
             d3AlphaDecay={0.02} // Slower decay for more stable positioning
             d3VelocityDecay={0.2} // Lower value for smoother movement
             linkDirectionalParticles={(link: any) => {
