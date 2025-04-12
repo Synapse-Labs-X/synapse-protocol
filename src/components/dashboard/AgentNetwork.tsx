@@ -422,7 +422,7 @@ const AgentNetwork = ({
           }}
           nodeRelSize={10}
           linkWidth={(link) => {
-            const value = link.value as number;
+            // const value = link.value as number;
             const source = getNodeId(link.source);
             const target = getNodeId(link.target);
 
