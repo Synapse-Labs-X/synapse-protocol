@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
-import { Cpu, Bot, BarChart2, Layers, MessageSquare } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
 import { ForceGraphMethods } from "react-force-graph-2d";
 
@@ -48,7 +47,7 @@ const AgentNetwork = ({
   selectedAgents = [],
   processingTransaction = false,
 }: AgentNetworkProps) => {
-  const graphRef = useRef<ForceGraphMethods>();
+  const graphRef = useRef<ForceGraphMethods>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [graphData, setGraphData] = useState<GraphData>({
     nodes: [],
@@ -436,7 +435,7 @@ const AgentNetwork = ({
             }
 
             // Base width on value
-            return Math.max(0.5, value);
+            return 0.5;
           }}
           linkColor={(link) => {
             const source = getNodeId(link.source);
@@ -491,10 +490,10 @@ const AgentNetwork = ({
               source === "main-agent" &&
               selectedAgents.includes(target)
             ) {
-              return 0.02; // Faster particles for active transactions
+              return 0.005; // Faster particles for active transactions
             }
 
-            return 0.01; // Regular speed
+            return 0.002; // Regular speed
           }}
           linkDirectionalParticleWidth={(link) => {
             const source = getNodeId(link.source);
@@ -505,7 +504,7 @@ const AgentNetwork = ({
               source === "main-agent" &&
               selectedAgents.includes(target)
             ) {
-              return 4; // Larger particles for active transactions
+              return 8; // Larger particles for active transactions
             }
 
             return 2; // Regular size
@@ -534,14 +533,6 @@ const AgentNetwork = ({
           backgroundColor="#0F172A" // Dark blue background
           // Disable physics simulation since we're using fixed positions
           cooldownTime={0}
-          d3Force={(engine) => {
-            // Disable forces that would move our fixed nodes
-            engine.stop();
-            // Remove forces that would cause node movement
-            engine.force("charge", null);
-            engine.force("center", null);
-            engine.force("link", null);
-          }}
         />
       )}
     </div>
