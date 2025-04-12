@@ -1,11 +1,9 @@
-// src/components/wallet/UserWalletButton.tsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { Wallet } from "lucide-react";
 import walletService from "@/lib/wallet/walletService";
-import UserWalletModal from "./UserWalletModal"; // We'll extract the modal to a separate component
+import UserWalletModal from "./UserWalletModal";
 
 interface UserWalletButtonProps {
   onBalanceUpdate: (amount: number) => void;
@@ -55,13 +53,13 @@ const UserWalletButton: React.FC<UserWalletButtonProps> = ({
 
   return (
     <>
-      {/* Simple button that always fits in navbar */}
+      {/* Improved button that matches the StatusBar components */}
       <button
         onClick={handleOpenModal}
         disabled={isLoading}
-        className="group px-3 py-2 rounded-lg bg-blue-800/50 border border-blue-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-blue-800 hover:border-blue-600/50 flex items-center gap-2"
+        className="group h-full px-3 py-1.5 rounded-lg bg-blue-800/50 border border-blue-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-blue-800/70 hover:border-blue-600/50 flex items-center gap-2"
       >
-        <Wallet size={16} className="text-blue-400" />
+        <Wallet size={14} className="text-blue-400" />
         <div>
           <span className="text-gray-400 text-xs">XRP</span>
           <div className="text-sm">
@@ -75,13 +73,13 @@ const UserWalletButton: React.FC<UserWalletButtonProps> = ({
             ) : isLoading ? (
               <span className="text-gray-300">Connecting...</span>
             ) : (
-              <span>Connect Wallet</span>
+              <span>Connect</span>
             )}
           </div>
         </div>
       </button>
 
-      {/* Render modal in portal */}
+      {/* Render modal when shown */}
       {showModal && (
         <UserWalletModal
           isOpen={showModal}

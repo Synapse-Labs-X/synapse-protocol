@@ -146,8 +146,8 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
         </div>
       </header>
 
-      {/* Main Content with Enhanced Layout */}
-      <div className="flex flex-1 overflow-hidden relative">
+      {/* Main Content with improved grid-based layout */}
+      <div className="flex-1 overflow-hidden relative">
         {/* Background decorative elements */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           {showGlowEffects && (
@@ -159,45 +159,6 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           )}
 
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjYwMCIgdmlld0JveD0iMCAwIDYwMCA2MDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGRlZnM+CiAgICA8cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMzMzc0RCIgc3Ryb2tlLXdpZHRoPSIxIiAvPgogICAgPC9wYXR0ZXJuPgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMGYxNzJhIiBvcGFjaXR5PSIwLjgiIC8+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIgb3BhY2l0eT0iMC4wNSIgLz4KPC9zdmc+')] opacity-30"></div>
-        </div>
-
-        {/* Network Graph - Enhanced container */}
-        <div className="hidden md:block w-full md:w-2/3 md:border-r md:border-gray-700/50 relative bg-gradient-network overflow-hidden">
-          {/* Cyberpunk grid overlay */}
-          <div
-            className={`absolute inset-0 z-0 cyberpunk-grid ${
-              processing ? "grid-active" : ""
-            } ${selectedAgent ? "grid-focused" : ""}`}
-          >
-            <div className="absolute inset-0 cyberpunk-grid-lines"></div>
-            <div className="absolute inset-0 cyberpunk-grid-glow"></div>
-            {processing && (
-              <div className="absolute inset-0 cyberpunk-grid-pulse"></div>
-            )}
-          </div>
-
-          {/* Floating particles */}
-          <div className="absolute inset-0 z-1 pointer-events-none">
-            <div className="particle particle-1"></div>
-            <div className="particle particle-2"></div>
-            <div className="particle particle-3"></div>
-            <div className="particle particle-4"></div>
-            <div className="particle particle-5"></div>
-          </div>
-
-          <div className="absolute top-2 left-2 z-10 bg-gray-800/70 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-700/50 flex items-center gap-1.5">
-            <Activity size={14} className="text-blue-400" />
-            <span>Agent Network Visualization</span>
-          </div>
-
-          <div className="h-full relative z-5">
-            <AgentNetwork
-              network={network}
-              onNodeClick={onAgentSelect}
-              selectedAgents={selectedAgents.map((agent) => agent.id)}
-              processingTransaction={processing}
-            />
-          </div>
         </div>
 
         {/* Mobile content - Simple tabs for mobile view */}
@@ -271,70 +232,112 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Panel - Enhanced UI with floating components */}
-        <div className="hidden md:flex md:w-1/3 flex-col bg-transparent relative">
-          {/* Agent Interaction - Floating style */}
-          <div className="p-4 relative z-10">
-            {/* Floating card with glow effect */}
-            <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg overflow-hidden transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-              {showGlowEffects && (
-                <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-70 blur-sm"></div>
+        {/* Desktop Grid Layout - Hidden on mobile */}
+        <div className="hidden md:grid md:grid-cols-12 h-full">
+          {/* Network Visualization - Takes 8 columns */}
+          <div className="col-span-8 relative bg-gradient-network overflow-hidden border-r border-gray-700/50">
+            {/* Cyberpunk grid overlay */}
+            <div
+              className={`absolute inset-0 z-0 cyberpunk-grid ${
+                processing ? "grid-active" : ""
+              } ${selectedAgent ? "grid-focused" : ""}`}
+            >
+              <div className="absolute inset-0 cyberpunk-grid-lines"></div>
+              <div className="absolute inset-0 cyberpunk-grid-glow"></div>
+              {processing && (
+                <div className="absolute inset-0 cyberpunk-grid-pulse"></div>
               )}
-              <div className="p-4">
-                <PromptInput
-                  onSubmit={onPromptSubmit}
-                  selectedAgents={selectedAgents}
-                  isProcessing={processing}
-                />
-              </div>
+            </div>
+
+            {/* Floating particles */}
+            <div className="absolute inset-0 z-1 pointer-events-none">
+              <div className="particle particle-1"></div>
+              <div className="particle particle-2"></div>
+              <div className="particle particle-3"></div>
+              <div className="particle particle-4"></div>
+              <div className="particle particle-5"></div>
+            </div>
+
+            <div className="absolute top-2 left-2 z-10 bg-gray-800/70 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-700/50 flex items-center gap-1.5">
+              <Activity size={14} className="text-blue-400" />
+              <span>Agent Network Visualization</span>
+            </div>
+
+            <div className="h-full relative z-5">
+              <AgentNetwork
+                network={network}
+                onNodeClick={onAgentSelect}
+                selectedAgents={selectedAgents.map((agent) => agent.id)}
+                processingTransaction={processing}
+              />
             </div>
           </div>
 
-          {/* Recent Transactions - Floating style */}
-          <div className="flex-1 overflow-y-auto p-4 relative z-10">
-            {/* Floating card with glow effect */}
-            <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg p-4 transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                  Recent Transactions
-                </h2>
-                <a
-                  href="#"
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                  View All <ExternalLink size={12} />
-                </a>
-              </div>
-
-              {/* TransactionHistory component */}
-              <div className="max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
-                <TransactionHistory
-                  transactions={transactions}
-                  agents={network.nodes}
-                />
+          {/* Right Panel - 4 columns with auto-grid layout for sections */}
+          <div className="col-span-4 flex flex-col overflow-hidden bg-gray-800/10">
+            {/* Agent Interaction */}
+            <div className="p-4 relative z-10 border-b border-gray-700/50">
+              <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg overflow-hidden transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+                {showGlowEffects && (
+                  <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-70 blur-sm"></div>
+                )}
+                <div className="p-4">
+                  <PromptInput
+                    onSubmit={onPromptSubmit}
+                    selectedAgents={selectedAgents}
+                    isProcessing={processing}
+                  />
+                </div>
               </div>
             </div>
+
+            {/* Transactions */}
+            <div className="flex-1 overflow-auto">
+              <div className="p-4 h-full">
+                <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg p-4 transition-all duration-300 h-full hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] overflow-hidden flex flex-col">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                      Recent Transactions
+                    </h2>
+                    <a
+                      href="#"
+                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                    >
+                      View All <ExternalLink size={12} />
+                    </a>
+                  </div>
+
+                  {/* TransactionHistory component with scrollable container */}
+                  <div className="flex-1 overflow-y-auto pr-1">
+                    <TransactionHistory
+                      transactions={transactions}
+                      agents={network.nodes}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Agent Details (conditionally rendered) */}
+            {selectedAgent && (
+              <div className="absolute bottom-4 right-4 left-4 z-20 max-h-[60%] overflow-auto">
+                {/* Floating agent details card */}
+                <div className="rounded-xl bg-gray-800/80 backdrop-blur-lg border border-gray-700/50 shadow-[0_0_20px_rgba(59,130,246,0.25)]">
+                  <AgentDetails
+                    agent={selectedAgent}
+                    onClose={onCloseDetails}
+                    recentTransactions={transactions
+                      .filter(
+                        (tx) =>
+                          tx.from === selectedAgent.id ||
+                          tx.to === selectedAgent.id
+                      )
+                      .slice(0, 5)}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* Agent Details (conditionally rendered) */}
-          {selectedAgent && (
-            <div className="p-4 relative z-20">
-              {/* Floating agent details card */}
-              <div className="rounded-xl bg-gray-800/60 backdrop-blur-sm border border-gray-700/50 shadow-[0_0_20px_rgba(59,130,246,0.25)]">
-                <AgentDetails
-                  agent={selectedAgent}
-                  onClose={onCloseDetails}
-                  recentTransactions={transactions
-                    .filter(
-                      (tx) =>
-                        tx.from === selectedAgent.id ||
-                        tx.to === selectedAgent.id
-                    )
-                    .slice(0, 5)}
-                />
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -432,6 +435,113 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
 
         .animate-float {
           animation: float 6s ease-in-out infinite;
+        }
+
+        /* Cyberpunk grid styling */
+        .cyberpunk-grid-lines {
+          background-image: linear-gradient(
+              to right,
+              rgba(59, 130, 246, 0.1) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              to bottom,
+              rgba(59, 130, 246, 0.1) 1px,
+              transparent 1px
+            );
+          background-size: 40px 40px;
+          opacity: 0.5;
+        }
+
+        .grid-active .cyberpunk-grid-lines {
+          background-image: linear-gradient(
+              to right,
+              rgba(59, 130, 246, 0.2) 1px,
+              transparent 1px
+            ),
+            linear-gradient(
+              to bottom,
+              rgba(59, 130, 246, 0.2) 1px,
+              transparent 1px
+            );
+        }
+
+        .grid-focused .cyberpunk-grid-glow {
+          box-shadow: inset 0 0 50px rgba(59, 130, 246, 0.3);
+        }
+
+        .cyberpunk-grid-pulse {
+          animation: gridPulse 3s infinite;
+        }
+
+        @keyframes gridPulse {
+          0%,
+          100% {
+            opacity: 0.1;
+          }
+          50% {
+            opacity: 0.3;
+          }
+        }
+
+        /* Particle animations */
+        .particle {
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: rgba(59, 130, 246, 0.4);
+          pointer-events: none;
+        }
+
+        .particle-1 {
+          top: 20%;
+          left: 10%;
+          animation: particleFloat 8s infinite;
+        }
+
+        .particle-2 {
+          top: 70%;
+          left: 20%;
+          animation: particleFloat 12s infinite;
+        }
+
+        .particle-3 {
+          top: 40%;
+          left: 70%;
+          animation: particleFloat 10s infinite;
+        }
+
+        .particle-4 {
+          top: 80%;
+          left: 80%;
+          animation: particleFloat 9s infinite;
+        }
+
+        .particle-5 {
+          top: 30%;
+          left: 50%;
+          animation: particleFloat 11s infinite;
+        }
+
+        @keyframes particleFloat {
+          0%,
+          100% {
+            transform: translate(0, 0);
+            opacity: 0.4;
+          }
+          25% {
+            transform: translate(10px, 10px);
+            opacity: 0.6;
+          }
+          50% {
+            transform: translate(5px, -5px);
+            opacity: 0.8;
+          }
+          75% {
+            transform: translate(-10px, 5px);
+            opacity: 0.6;
+          }
         }
       `}</style>
     </div>
