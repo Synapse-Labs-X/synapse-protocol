@@ -7,6 +7,7 @@ import { analyzePrompt } from "@/lib/agents/analysis";
 import { executeTransactions } from "@/lib/agents/orchestrator";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import ClientSideOnly from "@/components/ClientSideOnly";
+import Image from "next/image";
 
 export default function DashboardPage() {
   // State management
@@ -301,19 +302,12 @@ export default function DashboardPage() {
             <div className="absolute w-full h-full rounded-full bg-blue-600/30 animate-ping"></div>
             <div className="absolute w-16 h-16 rounded-full border-4 border-t-blue-500 border-r-blue-500 border-b-transparent border-l-transparent animate-spin"></div>
             <div className="relative text-blue-400">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
+              <Image
+                width={28}
+                height={28}
+                src="/synapse-logo.png"
+                alt="Logo"
+              />
             </div>
           </div>
 

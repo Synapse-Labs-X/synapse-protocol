@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Zap, Server, Database } from "lucide-react";
+import { Server, Database } from "lucide-react";
+import Image from "next/image";
 
 const EnhancedLoading = () => {
   const [progress, setProgress] = useState(0);
@@ -43,7 +44,13 @@ const EnhancedLoading = () => {
           <div className="absolute w-20 h-20 rounded-full border-4 border-t-blue-500 border-r-blue-500 border-b-transparent border-l-transparent animate-spin"></div>
           <div className="absolute w-16 h-16 rounded-full bg-gradient-to-br from-blue-600/10 to-indigo-600/10 backdrop-blur-sm"></div>
           <div className="relative text-blue-400">
-            <Zap size={36} />
+            <Image
+              width={36}
+              height={36}
+              src="/synapse-logo.png"
+              alt="Logo"
+              className="absolute inset-0 w-full h-full object-cover rounded-full"
+            />
           </div>
         </div>
 
