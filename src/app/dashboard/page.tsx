@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// src/app/dashboard/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -10,11 +10,13 @@ import WalletInitialization from "@/components/wallet/WalletInitialization";
 import walletInitService from "@/lib/xrp/walletInitService";
 import transactionService from "@/lib/xrp/transactionService";
 import walletService from "@/lib/wallet/walletService";
-import { analyzePrompt } from "@/lib/agents/analysis";
 import Image from "next/image";
-import { socketManager } from "@/lib/utils/socket";
 import TaskResultModal from "@/components/task/TaskResultModal";
-import { waitForRunCompletion } from "@/lib/utils/crewAISocket";
+import {
+  executeTaskWithCrewAI,
+  createAgentChainFromCrewAI,
+  CrewAILogUpdate,
+} from "@/lib/utils/crewAiWebSocketService";
 
 export default function DashboardPage() {
   // State management
@@ -181,46 +183,6 @@ export default function DashboardPage() {
     return () => clearTimeout(loadTimer);
   }, [hasMounted]);
 
-  // Set up socket listeners for CrewAI communication
-  useEffect(() => {
-    const socket = socketManager.connect();
-
-    // Connection events
-    socket.on("connect", () => {
-      console.log("[WebSocket] Connected to server");
-    });
-
-    socket.on("disconnect", () => {
-      console.log("[WebSocket] Disconnected from server");
-    });
-
-    // CrewAI execution logs
-    socket.on(
-      "log_update",
-      (data: { log_prefix: any; type: any; run_id: any; data: any }) => {
-        console.groupCollapsed(`[CrewAI] ${data.log_prefix}`);
-        console.log("Type:", data.type);
-        console.log("Run ID:", data.run_id);
-        console.log("Data:", data.data);
-        console.groupEnd();
-      }
-    );
-
-    // Error handling
-    socket.on("error", (error: any) => {
-      console.error("[WebSocket Error]", error);
-    });
-
-    return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("log_update");
-      socket.off("run_complete");
-      socket.off("error");
-      socket.disconnect();
-    };
-  }, []);
-
   // Initialize all agent wallets on page load
   const initializeWallets = async (agents: Agent[]) => {
     setInitializing(true);
@@ -269,7 +231,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Handle prompt submission
+  // Handle prompt submission - UPDATED to use WebSocket service
   const handleSubmit = async (promptText: string) => {
     if (!promptText.trim()) return;
 
@@ -277,86 +239,79 @@ export default function DashboardPage() {
     console.log("[Dashboard] Submitting task:", promptText);
 
     try {
-      // First, update the UI to show the agents are processing
-      const agentsToUse = await analyzePromptAndSelectAgents(promptText);
-
-      // Set selected agents for visualization
-      setSelectedAgents(agentsToUse);
-
       // Store the prompt for the result modal
       setTaskPrompt(promptText);
 
-      // Start CrewAI task
-      const response = await fetch("/api/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_description: promptText }),
-      });
-
-      console.log("[Dashboard] API Response Status:", response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("[Dashboard] API Error:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorData,
-        });
-        throw new Error("Failed to start task");
-      }
-
-      const { run_id } = await response.json();
-      console.log("[Dashboard] Task started with Run ID:", run_id);
-
-      // Wait for the run to complete using our helper
-      const result = await waitForRunCompletion(run_id);
+      // Use the WebSocket service to execute the task
+      const result = await executeTaskWithCrewAI(promptText, handleLogUpdate);
       console.log("[Dashboard] Task completed:", result);
 
-      // Process the result
-      if (result.status === "success" && result.final_result) {
-        const agentHierarchy = result.final_result.agent_hierarchy || [];
+      // Set the agent chain for visualization based on crew result
+      if (result.success && result.agentHierarchy?.length > 0) {
+        // Convert the CrewAI agent hierarchy to our agent chain
+        const agentChain = createAgentChainFromCrewAI(result, network.nodes);
 
-        // Get the main agent
-        const mainAgent = network.nodes.find(
-          (node) => node.id === "main-agent"
-        );
-        if (!mainAgent) {
-          throw new Error("Main agent not found in network");
+        // Update the UI with selected agents
+        setSelectedAgents(agentChain);
+
+        // Store the agent chain in the result for later use
+        result.agentChain = agentChain;
+
+        // Process the agent chain sequentially for transactions
+        if (agentChain.length > 1) {
+          const { totalCost, agentNames } = await processAgentChainSequentially(
+            agentChain,
+            promptText
+          );
+
+          // Update main agent balance
+          setBalance((prev) => prev - totalCost);
+
+          // Store result information
+          setTaskResult(result.finalOutput || "Task completed successfully!");
+          setTaskAgents(agentNames);
+          setTaskCost(totalCost);
+
+          // Show the task result modal after a short delay
+          setTimeout(() => {
+            setShowTaskResult(true);
+          }, 1000);
         }
-
-        // Create sequential agent chain
-        const agentChain = createAgentChain(
-          promptText,
-          agentHierarchy,
-          mainAgent,
-          network
+      } else {
+        // If no agent hierarchy was returned, use a default text generator
+        const defaultAgent = network.nodes.find(
+          (node) => node.id === "text-gen-1"
         );
+        if (defaultAgent) {
+          const agentChain = [
+            network.nodes.find((node) => node.id === "main-agent") as Agent,
+            defaultAgent,
+          ].filter(Boolean) as Agent[];
 
-        console.log(
-          "[Dashboard] Agent chain created:",
-          agentChain.map((a: { name: any }) => a.name).join(" -> ")
-        );
+          setSelectedAgents(agentChain);
 
-        // Process chain sequentially
-        const { totalCost, agentNames } = await processAgentChainSequentially(
-          agentChain,
-          promptText
-        );
+          // Process the default agent chain
+          const { totalCost, agentNames } = await processAgentChainSequentially(
+            agentChain,
+            promptText
+          );
 
-        // Update main agent balance
-        setBalance((prev) => prev - totalCost);
+          // Update main agent balance
+          setBalance((prev) => prev - totalCost);
 
-        // Store result information
-        setTaskResult(
-          result.final_result.final_output || "Task completed successfully!"
-        );
-        setTaskAgents(agentNames);
-        setTaskCost(totalCost);
+          // Store result information
+          setTaskResult(
+            result.finalOutput ||
+              "Task completed with minimal agent involvement."
+          );
+          setTaskAgents(agentNames);
+          setTaskCost(totalCost);
 
-        // Show the task result modal after a short delay
-        setTimeout(() => {
-          setShowTaskResult(true);
-        }, 1000);
+          // Show the task result modal after a short delay
+          setTimeout(() => {
+            setShowTaskResult(true);
+          }, 1000);
+        }
       }
     } catch (error) {
       console.error("[Dashboard] Submission error:", error);
@@ -365,6 +320,32 @@ export default function DashboardPage() {
       resetAgentStatus();
     } finally {
       setProcessing(false);
+    }
+  };
+
+  // Handle WebSocket log updates
+  const handleLogUpdate = (log: CrewAILogUpdate) => {
+    console.log(`[CrewAI Log] ${log.type}:`, log.data);
+
+    // For certain log types, we could update the UI accordingly
+    if (log.type === "agent_created") {
+      // Highlight the agent in the network
+      const agentName = log.data.agent_name;
+      if (agentName) {
+        // Find the corresponding agent in our network
+        const agent = network.nodes.find((node) => node.name === agentName);
+        if (agent) {
+          setNetwork((prevNetwork) => {
+            const updatedNodes = prevNetwork.nodes.map((node) => {
+              if (node.id === agent.id) {
+                return { ...node, status: "processing" as const };
+              }
+              return node;
+            });
+            return { ...prevNetwork, nodes: updatedNodes };
+          });
+        }
+      }
     }
   };
 
@@ -412,7 +393,7 @@ export default function DashboardPage() {
         updatedLinks[existingLinkIndex] = {
           ...updatedLinks[existingLinkIndex],
           value: (updatedLinks[existingLinkIndex].value as number) + 1,
-          // Add an active flag for styling
+          active: true,
         };
 
         // Deactivate other links
@@ -429,6 +410,7 @@ export default function DashboardPage() {
           source: transaction.from,
           target: transaction.to,
           value: 1,
+          active: true,
         });
       }
 
@@ -496,184 +478,6 @@ export default function DashboardPage() {
     return { transactions, totalCost, agentNames };
   };
 
-  // Analyze the prompt and determine which agents to use
-  const analyzePromptAndSelectAgents = async (promptText: string) => {
-    try {
-      // Use existing analysis function
-      const result = await analyzePrompt(promptText);
-
-      // Map selected agent IDs to actual agent objects
-      const selectedAgents = result.selectedAgents
-        .map((id) => network.nodes.find((node) => node.id === id))
-        .filter((agent) => agent !== undefined) as Agent[];
-
-      // If no agents were found, default to text-gen-1
-      if (selectedAgents.length === 0) {
-        const defaultAgent = network.nodes.find(
-          (node) => node.id === "text-gen-1"
-        );
-        if (defaultAgent) {
-          selectedAgents.push(defaultAgent);
-        }
-      }
-
-      return selectedAgents;
-    } catch (error) {
-      console.error("Error analyzing prompt:", error);
-      // Default to text-gen-1 if analysis fails
-      const defaultAgent = network.nodes.find(
-        (node) => node.id === "text-gen-1"
-      );
-      return defaultAgent ? [defaultAgent] : [];
-    }
-  };
-
-  // Find an agent by name
-  const findAgentByName = (name: string): Agent | undefined => {
-    // Try direct match first
-    let agent = network.nodes.find(
-      (node) => node.name.toLowerCase() === name.toLowerCase()
-    );
-
-    if (agent) return agent;
-
-    // Try to match by removing spaces in agent name
-    const normalizedName = name.replace(/\s+/g, "").toLowerCase();
-
-    agent = network.nodes.find((node) => {
-      const nodeName = node.name.replace(/\s+/g, "").toLowerCase();
-      return nodeName === normalizedName;
-    });
-
-    if (agent) return agent;
-
-    // Try to match by substring
-    agent = network.nodes.find((node) =>
-      node.name.toLowerCase().includes(name.toLowerCase())
-    );
-
-    if (agent) return agent;
-
-    // Map specific agent names from the API to our network
-    const nameMapping: Record<string, string> = {
-      "agent 1": "text-gen-1",
-      "agent 2": "data-analyzer",
-      "agent 3": "research-assistant",
-      "agent 4": "summarizer",
-    };
-
-    const mappedId = nameMapping[name.toLowerCase()];
-    if (mappedId) {
-      return network.nodes.find((node) => node.id === mappedId);
-    }
-
-    return undefined;
-  };
-
-  const createAgentChain = (
-    promptText: string,
-    hierarchyData: any[],
-    mainAgent: Agent,
-    network: AgentNetworkType
-  ): Agent[] => {
-    // Step 1: Start with the main agent
-    const chain: Agent[] = [mainAgent];
-
-    // Step 2: Use hierarchy data if available
-    if (hierarchyData && hierarchyData.length > 0) {
-      // Sort by level if available
-      const sortedHierarchy = [...hierarchyData].sort(
-        (a, b) => (a.level || 0) - (b.level || 0)
-      );
-
-      // Map agent names to actual agents
-      for (const hierarchyAgent of sortedHierarchy) {
-        const name = hierarchyAgent.agent_name;
-        const agent = findAgentByName(name);
-        if (agent && !chain.includes(agent)) {
-          chain.push(agent);
-        }
-      }
-    }
-
-    // Step 3: If hierarchy didn't produce a chain, infer based on prompt
-    if (chain.length <= 1) {
-      // Example: Simple context-based chaining
-
-      // Some example logic to determine a sequence
-      // Note: This should be customized based on your specific use case
-
-      // Example: Data analysis followed by summarization
-      if (
-        promptText.toLowerCase().includes("analyze") ||
-        promptText.toLowerCase().includes("data")
-      ) {
-        const dataAnalyzer = network.nodes.find(
-          (n) => n.id === "data-analyzer"
-        );
-        if (dataAnalyzer) chain.push(dataAnalyzer);
-
-        if (
-          promptText.toLowerCase().includes("summary") ||
-          promptText.toLowerCase().includes("summarize")
-        ) {
-          const summarizer = network.nodes.find((n) => n.id === "summarizer");
-          if (summarizer) chain.push(summarizer);
-        }
-      }
-      // Translation chain
-      else if (promptText.toLowerCase().includes("translate")) {
-        const textGen = network.nodes.find((n) => n.id === "text-gen-1");
-        if (textGen) chain.push(textGen);
-
-        const translator = network.nodes.find((n) => n.id === "translator");
-        if (translator) chain.push(translator);
-      }
-      // Code generation chain
-      else if (
-        promptText.toLowerCase().includes("code") ||
-        promptText.toLowerCase().includes("program")
-      ) {
-        const researchAssistant = network.nodes.find(
-          (n) => n.id === "research-assistant"
-        );
-        if (researchAssistant) chain.push(researchAssistant);
-
-        const codeGenerator = network.nodes.find(
-          (n) => n.id === "code-generator"
-        );
-        if (codeGenerator) chain.push(codeGenerator);
-      }
-      // Image generation chain
-      else if (
-        promptText.toLowerCase().includes("image") ||
-        promptText.toLowerCase().includes("picture") ||
-        promptText.toLowerCase().includes("visual")
-      ) {
-        const textGen = network.nodes.find((n) => n.id === "text-gen-1");
-        if (textGen) chain.push(textGen);
-
-        const imageGen = network.nodes.find((n) => n.id === "image-gen-1");
-        if (imageGen) chain.push(imageGen);
-      }
-      // Default to text-gen-1 if no specific pattern is found
-      else {
-        const textGen = network.nodes.find((n) => n.id === "text-gen-1");
-        if (textGen) chain.push(textGen);
-      }
-    }
-
-    // Always ensure we have at least one agent in the chain besides the main agent
-    if (chain.length <= 1) {
-      const defaultAgent = network.nodes.find((n) => n.id === "text-gen-1");
-      if (defaultAgent && !chain.includes(defaultAgent)) {
-        chain.push(defaultAgent);
-      }
-    }
-
-    return chain;
-  };
-
   // Reset agent status after task completion or error
   const resetAgentStatus = () => {
     setNetwork((prevNetwork) => {
@@ -686,8 +490,6 @@ export default function DashboardPage() {
       return { ...prevNetwork, nodes: updatedNodes };
     });
   };
-
-  // Update network data with new transactions
 
   // Handler for agent selection
   const handleAgentSelect = (agent: Agent) => {

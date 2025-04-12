@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/lib/utils/crewAISocket.ts
 import { socketManager } from "./socket";
 
