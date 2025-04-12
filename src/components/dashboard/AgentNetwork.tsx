@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Cpu, Bot, BarChart2, Layers, MessageSquare } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
+import { ForceGraphMethods } from "react-force-graph-2d";
 
 // Import ForceGraph2D with no SSR to avoid hydration issues
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
@@ -16,9 +17,8 @@ interface AgentNetworkProps {
   processingTransaction?: boolean;
 }
 
-// Extended Graph Node type to handle force graph properties
+// Define node type that matches both our Agent type and what ForceGraph expects
 interface GraphNode extends Agent {
-  id: string;
   x?: number;
   y?: number;
   vx?: number;
@@ -28,11 +28,18 @@ interface GraphNode extends Agent {
   index?: number;
 }
 
+// Define link type for the graph
 interface GraphLink {
   source: string | GraphNode;
   target: string | GraphNode;
   value: number;
   index?: number;
+}
+
+// Define the graph data structure
+interface GraphData {
+  nodes: GraphNode[];
+  links: GraphLink[];
 }
 
 const AgentNetwork = ({
@@ -41,9 +48,12 @@ const AgentNetwork = ({
   selectedAgents = [],
   processingTransaction = false,
 }: AgentNetworkProps) => {
-  const graphRef = useRef(null);
+  const graphRef = useRef<ForceGraphMethods>();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [graphData, setGraphData] = useState({ nodes: [], links: [] });
+  const [graphData, setGraphData] = useState<GraphData>({
+    nodes: [],
+    links: [],
+  });
   const [hasMounted, setHasMounted] = useState(false);
 
   // Set mounted state
@@ -51,16 +61,49 @@ const AgentNetwork = ({
     setHasMounted(true);
   }, []);
 
-  // Create all-to-all connections between agents
+  // Create graph data with positioning logic
   useEffect(() => {
     if (!hasMounted) return;
 
-    const nodes = network.nodes.map((node) => ({
-      ...node,
-    }));
+    // Clone the nodes and calculate positions for a fixed layout
+    const nodes: GraphNode[] = network.nodes.map((node) => {
+      // For main agent, fixed position at the top (north)
+      if (node.id === "main-agent") {
+        return {
+          ...node,
+          fx: dimensions.width / 2, // Center horizontally
+          fy: 70, // Fixed position at the top
+        };
+      }
 
-    // Create links for all-to-all connections
-    const allLinks = [];
+      // For other nodes, pre-calculate positions in a semi-circle around the bottom
+      const otherNodes = network.nodes.filter((n) => n.id !== "main-agent");
+      const indexOfNode = otherNodes.findIndex((n) => n.id === node.id);
+
+      if (indexOfNode !== -1) {
+        const totalNodes = otherNodes.length;
+        const angleStep = Math.PI / totalNodes;
+        const angle = indexOfNode * angleStep;
+
+        // Calculate position in a semi-circle
+        const radius = Math.min(dimensions.width, dimensions.height);
+        const x =
+          dimensions.width / 2 + radius * Math.cos(angle + Math.PI / 14);
+        const y =
+          dimensions.height * 0.6 + radius * Math.sin(angle + Math.PI / 14);
+
+        return {
+          ...node,
+          fx: x,
+          fy: y,
+        };
+      }
+
+      return { ...node };
+    });
+
+    // Process links
+    const allLinks: GraphLink[] = [];
 
     // First add existing links from the network
     network.links.forEach((link) => {
@@ -96,7 +139,7 @@ const AgentNetwork = ({
     });
 
     setGraphData({ nodes, links: allLinks });
-  }, [network, hasMounted]);
+  }, [network, hasMounted, dimensions]);
 
   // Agent styling by type
   const agentStyles = {
@@ -138,23 +181,24 @@ const AgentNetwork = ({
 
   // Custom node rendering function
   const nodeCanvasObject = (
-    node: GraphNode,
+    node: any,
     ctx: CanvasRenderingContext2D,
     globalScale: number
   ) => {
+    const graphNode = node as GraphNode;
     // Safety checks for node positions
     if (
-      node.x === undefined ||
-      node.y === undefined ||
-      !isFinite(node.x) ||
-      !isFinite(node.y)
+      graphNode.x === undefined ||
+      graphNode.y === undefined ||
+      !isFinite(graphNode.x) ||
+      !isFinite(graphNode.y)
     ) {
       return;
     }
 
-    const label = node.name || "Unknown";
+    const label = graphNode.name || "Unknown";
     const fontSize = 14 / globalScale;
-    const nodeType = node.type;
+    const nodeType = graphNode.type;
 
     // Node dimensions
     const nodeWidth = Math.max(label.length * 8, 140) / globalScale;
@@ -162,14 +206,14 @@ const AgentNetwork = ({
     const cornerRadius = 6 / globalScale;
 
     // Get colors
-    const isSelected = selectedAgents.includes(node.id);
-    const isProcessing = node.status === "processing";
+    const isSelected = selectedAgents.includes(graphNode.id);
+    const isProcessing = graphNode.status === "processing";
     const baseColor = agentStyles[nodeType]?.color || "#999999";
     const glowColor = agentStyles[nodeType]?.glowColor || "#666666";
 
     // Get positions
-    const nodeX = node.x;
-    const nodeY = node.y;
+    const nodeX = graphNode.x;
+    const nodeY = graphNode.y;
 
     ctx.save();
     ctx.font = `bold ${fontSize}px Arial`;
@@ -247,7 +291,7 @@ const AgentNetwork = ({
     ctx.font = `${fontSize * 0.8}px Arial`;
     ctx.fillStyle = "#FFFFFF99";
     ctx.fillText(
-      formatCurrency(node.balance || 0),
+      formatCurrency(graphNode.balance || 0),
       nodeX,
       nodeY + fontSize * 0.9
     );
@@ -291,16 +335,22 @@ const AgentNetwork = ({
     );
   }
 
+  // Handle node click with proper type conversion
+  const handleNodeClick = (node: any) => {
+    const graphNode = node as GraphNode;
+    onNodeClick(graphNode);
+  };
+
   return (
     <div id="graph-container" className="w-full h-full relative bg-gray-900">
       {hasMounted && (
         <ForceGraph2D
-          ref={graphRef}
+          ref={graphRef as React.MutableRefObject<ForceGraphMethods>}
           graphData={graphData}
           width={dimensions.width}
           height={dimensions.height}
           nodeCanvasObject={nodeCanvasObject}
-          nodePointerAreaPaint={(node, color, ctx) => {
+          nodePointerAreaPaint={(node: any, color, ctx) => {
             const graphNode = node as GraphNode;
             if (
               graphNode.x === undefined ||
@@ -393,7 +443,9 @@ const AgentNetwork = ({
             const target = getNodeId(link.target);
 
             // Get target node color for the link
-            const targetNode = graphData.nodes.find((n) => n.id === target);
+            const targetNode = graphData.nodes.find(
+              (n) => n.id === target
+            ) as GraphNode;
 
             if (
               processingTransaction &&
@@ -401,16 +453,16 @@ const AgentNetwork = ({
                 (target === "main-agent" && selectedAgents.includes(source)))
             ) {
               // Bright link for active transactions
-              return targetNode
+              return targetNode && targetNode.type
                 ? agentStyles[targetNode.type]?.glowColor || "#FFFFFF"
                 : "#FFFFFF";
             }
 
             // Semi-transparent link for regular connections
-            return "rgba(80, 80, 255, 0.2)";
+            return "rgba(80, 80, 255, 0.8)";
           }}
-          onNodeClick={onNodeClick}
-          cooldownTicks={100}
+          onNodeClick={handleNodeClick}
+          cooldownTicks={0}
           d3AlphaDecay={0.02}
           d3VelocityDecay={0.1}
           linkDirectionalParticles={(link) => {
@@ -468,8 +520,10 @@ const AgentNetwork = ({
               selectedAgents.includes(target)
             ) {
               // Get target node color for transaction particles
-              const targetNode = graphData.nodes.find((n) => n.id === target);
-              if (targetNode) {
+              const targetNode = graphData.nodes.find(
+                (n) => n.id === target
+              ) as GraphNode;
+              if (targetNode && targetNode.type) {
                 return agentStyles[targetNode.type]?.glowColor || "#FFE066";
               }
               return "#FFE066"; // Default to yellow if node not found
@@ -478,6 +532,16 @@ const AgentNetwork = ({
             return "#FFFFFF33"; // Semi-transparent white for regular particles
           }}
           backgroundColor="#0F172A" // Dark blue background
+          // Disable physics simulation since we're using fixed positions
+          cooldownTime={0}
+          d3Force={(engine) => {
+            // Disable forces that would move our fixed nodes
+            engine.stop();
+            // Remove forces that would cause node movement
+            engine.force("charge", null);
+            engine.force("center", null);
+            engine.force("link", null);
+          }}
         />
       )}
     </div>
