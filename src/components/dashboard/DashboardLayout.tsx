@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import {
   Zap,
@@ -273,52 +271,68 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Panel - Enhanced UI */}
-        <div className="hidden md:flex md:w-1/3 flex-col bg-gray-800/20 backdrop-blur-sm">
-          {/* Agent Interaction */}
-          <div className="p-4 border-b border-gray-700/50 bg-gray-800/30 relative">
-            {showGlowEffects && (
-              <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-70 blur-sm"></div>
-            )}
-            <PromptInput
-              onSubmit={onPromptSubmit}
-              selectedAgents={selectedAgents}
-              isProcessing={processing}
-            />
+        {/* Right Panel - Enhanced UI with floating components */}
+        <div className="hidden md:flex md:w-1/3 flex-col bg-transparent relative">
+          {/* Agent Interaction - Floating style */}
+          <div className="p-4 relative z-10">
+            {/* Floating card with glow effect */}
+            <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg overflow-hidden transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+              {showGlowEffects && (
+                <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-70 blur-sm"></div>
+              )}
+              <div className="p-4">
+                <PromptInput
+                  onSubmit={onPromptSubmit}
+                  selectedAgents={selectedAgents}
+                  isProcessing={processing}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Recent Transactions */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                Recent Transactions
-              </h2>
-              <a
-                href="#"
-                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-              >
-                View All <ExternalLink size={12} />
-              </a>
+          {/* Recent Transactions - Floating style */}
+          <div className="flex-1 overflow-y-auto p-4 relative z-10">
+            {/* Floating card with glow effect */}
+            <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg p-4 transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                  Recent Transactions
+                </h2>
+                <a
+                  href="#"
+                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                >
+                  View All <ExternalLink size={12} />
+                </a>
+              </div>
+
+              {/* TransactionHistory component */}
+              <div className="max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
+                <TransactionHistory
+                  transactions={transactions}
+                  agents={network.nodes}
+                />
+              </div>
             </div>
-            <TransactionHistory
-              transactions={transactions}
-              agents={network.nodes}
-            />
           </div>
 
           {/* Agent Details (conditionally rendered) */}
           {selectedAgent && (
-            <div className="p-4 border-t border-gray-700/50 bg-gray-800/30">
-              <AgentDetails
-                agent={selectedAgent}
-                onClose={onCloseDetails}
-                recentTransactions={transactions
-                  .filter(
-                    (tx) =>
-                      tx.from === selectedAgent.id || tx.to === selectedAgent.id
-                  )
-                  .slice(0, 5)}
-              />
+            <div className="p-4 relative z-20">
+              {/* Floating agent details card */}
+              <div className="rounded-xl bg-gray-800/60 backdrop-blur-sm border border-gray-700/50 shadow-[0_0_20px_rgba(59,130,246,0.25)]">
+                <AgentDetails
+                  agent={selectedAgent}
+                  onClose={onCloseDetails}
+                  recentTransactions={transactions
+                    .filter(
+                      (tx) =>
+                        tx.from === selectedAgent.id ||
+                        tx.to === selectedAgent.id
+                    )
+                    .slice(0, 5)}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -360,7 +374,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
         <div className="hidden md:block h-px w-full bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-30"></div>
       )}
 
-      {/* Add global CSS for animations */}
+      {/* Add global CSS for animations and floating elements */}
       <style jsx global>{`
         @keyframes pulse {
           0%,
@@ -392,6 +406,18 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           }
         }
 
+        @keyframes float {
+          0% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-5px);
+          }
+          100% {
+            transform: translateY(0px);
+          }
+        }
+
         .animate-pulse {
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
@@ -402,6 +428,10 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
 
         .animate-shimmer {
           animation: shimmer 3s infinite;
+        }
+
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
         }
       `}</style>
     </div>
