@@ -13,7 +13,7 @@ export default function Home() {
   }, [router]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-900 text-white">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-futuristic text-white">
       <div className="w-full max-w-lg text-center">
         <div className="flex items-center justify-center mb-6">
           <Zap size={48} className="text-yellow-400 mr-2" />

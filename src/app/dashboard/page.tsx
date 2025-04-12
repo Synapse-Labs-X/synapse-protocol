@@ -309,7 +309,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
+    <div className="flex flex-col h-screen bg-gradient-futuristic text-white">
       {/* Status Bar */}
       <StatusBar
         balance={balance}

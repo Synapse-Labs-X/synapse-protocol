@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --gradient-start: #0f172a;
+  --gradient-mid: #111827;
+  --gradient-end: #0c0f1d;
 }
 
 @theme inline {
@@ -16,7 +19,70 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --gradient-start: #0f172a;
+    --gradient-mid: #111827;
+    --gradient-end: #0c0f1d;
   }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Futuristic background gradient */
+.bg-gradient-futuristic {
+  background: linear-gradient(
+    135deg,
+    var(--gradient-start),
+    var(--gradient-mid) 60%,
+    var(--gradient-end)
+  );
+  background-attachment: fixed;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated gradient mesh overlay for futuristic feel */
+.bg-gradient-futuristic::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: linear-gradient(
+      to right,
+      rgba(30, 64, 175, 0.05) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgba(30, 64, 175, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle glow effect */
+.bg-gradient-futuristic::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+      circle at 15% 40%,
+      rgba(56, 189, 248, 0.08),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 85% 70%,
+      rgba(99, 102, 241, 0.08),
+      transparent 45%
+    );
+  pointer-events: none;
+  z-index: 0;
 }
 
 body {
