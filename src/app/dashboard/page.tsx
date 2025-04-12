@@ -1,9 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
-import { v4 as uuidv4 } from "uuid";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import ClientSideOnly from "@/components/ClientSideOnly";
 import WalletInitialization from "@/components/wallet/WalletInitialization";
@@ -21,16 +21,12 @@ export default function DashboardPage() {
   });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
   const [processing, setProcessing] = useState<boolean>(false);
   const [balance, setBalance] = useState<number>(995); // Starting balance
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasMounted, setHasMounted] = useState<boolean>(false);
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [logs, setLogs] = useState<Array<{ type: string; message: string }>>(
-    []
-  );
   // Wallet initialization states
   const [initializing, setInitializing] = useState<boolean>(false);
   const [initProgress, setInitProgress] = useState<{
@@ -188,28 +184,34 @@ export default function DashboardPage() {
     });
 
     // CrewAI execution logs
-    socket.on("log_update", (data) => {
-      console.groupCollapsed(`[CrewAI] ${data.log_prefix}`);
-      console.log("Type:", data.type);
-      console.log("Run ID:", data.run_id);
-      console.log("Data:", data.data);
-      console.groupEnd();
-    });
+    socket.on(
+      "log_update",
+      (data: { log_prefix: any; type: any; run_id: any; data: any }) => {
+        console.groupCollapsed(`[CrewAI] ${data.log_prefix}`);
+        console.log("Type:", data.type);
+        console.log("Run ID:", data.run_id);
+        console.log("Data:", data.data);
+        console.groupEnd();
+      }
+    );
 
     // Final results
-    socket.on("run_complete", (data) => {
-      console.group("[CrewAI] Run Completed");
-      console.log("Status:", data.status);
-      console.log("Run ID:", data.run_id);
-      if (data.error) {
-        console.error("Error:", data.error);
+    socket.on(
+      "run_complete",
+      (data: { status: any; run_id: any; error: any; final_result: any }) => {
+        console.group("[CrewAI] Run Completed");
+        console.log("Status:", data.status);
+        console.log("Run ID:", data.run_id);
+        if (data.error) {
+          console.error("Error:", data.error);
+        }
+        console.log("Final Result:", data.final_result);
+        console.groupEnd();
       }
-      console.log("Final Result:", data.final_result);
-      console.groupEnd();
-    });
+    );
 
     // Error handling
-    socket.on("error", (error) => {
+    socket.on("error", (error: any) => {
       console.error("[WebSocket Error]", error);
     });
 
@@ -311,6 +313,7 @@ export default function DashboardPage() {
   };
 
   // Update network data with new transactions
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const updateNetwork = (
     agentIds: string[],
     newTransactions: Transaction[]

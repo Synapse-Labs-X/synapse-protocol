@@ -54,6 +54,7 @@ const UserWalletModal: React.FC<UserWalletModalProps> = ({
     if (isOpen) {
       loadWalletData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const loadWalletData = async () => {

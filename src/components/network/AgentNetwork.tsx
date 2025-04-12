@@ -121,7 +121,7 @@ const AgentNetwork = ({
         });
       }
     }
-  }, [containerRef.current, hasMounted, dimensions]);
+  }, [hasMounted, dimensions]);
 
   // Create graph data with positioning logic based on current dimensions
   useEffect(() => {
@@ -252,7 +252,7 @@ const AgentNetwork = ({
         }
       }, 300);
     }
-  }, [graphRef.current, graphData.nodes.length]);
+  }, [graphData.nodes.length]);
 
   // Custom node rendering function
   const nodeCanvasObject = (
