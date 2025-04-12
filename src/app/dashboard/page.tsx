@@ -1074,6 +1074,8 @@ export default function DashboardPage() {
           onClose={() => setShowTaskResult(false)}
           promptText={taskPrompt}
           result={taskResult}
+          usedAgents={taskAgents}
+          totalCost={taskCost}
         />
       )}
 
