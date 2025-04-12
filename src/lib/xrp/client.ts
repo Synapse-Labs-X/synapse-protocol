@@ -1,5 +1,3 @@
-// src/lib/xrp/client.ts
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client, Wallet, xrpToDrops, dropsToXrp } from "xrpl";
 import {
@@ -14,10 +12,10 @@ interface XrplTransactionResult {
     hash?: string;
     ledger_index?: number;
     meta?:
-      | {
-          TransactionResult?: string;
-        }
-      | string;
+    | {
+      TransactionResult?: string;
+    }
+    | string;
     Fee?: string;
     [key: string]: any;
   };
@@ -511,12 +509,12 @@ class XrpClient {
         Destination: toWallet.address,
         Memos: memo
           ? [
-              {
-                Memo: {
-                  MemoData: Buffer.from(memo, "utf8").toString("hex"),
-                },
+            {
+              Memo: {
+                MemoData: Buffer.from(memo, "utf8").toString("hex"),
               },
-            ]
+            },
+          ]
           : undefined,
       });
 
