@@ -42,6 +42,7 @@ export default function DashboardPage() {
           balance: 995,
           cost: 0,
           status: "active",
+          walletAddress: "rMainAgentAddressHere123456789", // Wallet address for Crossmark integration
         },
         {
           id: "text-gen-1",
@@ -292,6 +293,46 @@ export default function DashboardPage() {
     setTransactions((prev) => [...prev]);
   };
 
+  // Handler for balance updates from Crossmark wallet
+  const handleBalanceUpdate = (amount: number) => {
+    // Update main agent balance
+    setBalance((prevBalance) => prevBalance + amount);
+
+    // Update main agent in the network
+    setNetwork((prevNetwork) => {
+      const updatedNodes = [...prevNetwork.nodes].map((node) => {
+        if (node.id === "main-agent") {
+          return {
+            ...node,
+            balance: node.balance + amount,
+          };
+        }
+        return node;
+      });
+
+      return {
+        ...prevNetwork,
+        nodes: updatedNodes,
+      };
+    });
+
+    // Create a new transaction record for the top-up
+    const topUpTransaction: Transaction = {
+      id: `crossmark-topup-${Date.now()}`,
+      from: "crossmark-wallet",
+      to: "main-agent",
+      amount: amount,
+      currency: "RLUSD",
+      timestamp: new Date().toISOString(),
+      status: "confirmed",
+      type: "payment",
+      memo: "Top up from Crossmark wallet",
+    };
+
+    // Add the transaction to the list
+    setTransactions((prev) => [topUpTransaction, ...prev].slice(0, 50));
+  };
+
   // Show enhanced loading state while initializing
   if (!hasMounted || isLoading) {
     return (
@@ -409,6 +450,7 @@ export default function DashboardPage() {
         onCloseDetails={handleCloseDetails}
         onPromptSubmit={handleSubmit}
         onTransactionComplete={handleTransactionComplete}
+        onBalanceUpdate={handleBalanceUpdate}
       />
     </ClientSideOnly>
   );

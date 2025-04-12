@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@crossmarkio/sdk": "^0.4.0",
     "lodash": "^4.17.21",
     "lucide-react": "^0.487.0",
     "next": "15.3.0",

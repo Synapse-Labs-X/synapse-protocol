@@ -9,10 +9,8 @@ import {
   X,
   Database,
   Shield,
-  Server,
   FileText,
 } from "lucide-react";
-import Image from "next/image";
 import { formatCurrency } from "@/lib/utils/formatters";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
@@ -20,7 +18,7 @@ import AgentNetwork from "@/components/dashboard/AgentNetwork";
 import TransactionHistory from "@/components/dashboard/TransactionHistory";
 import AgentDetails from "@/components/dashboard/AgentDetails";
 import PromptInput from "@/components/dashboard/PromptInput";
-import StatusBarMenu from "@/components/dashboard/StatusBarMenu";
+import StatusBar from "@/components/dashboard/StatusBar";
 
 interface EnhancedDashboardProps {
   network: AgentNetworkType;
@@ -33,6 +31,7 @@ interface EnhancedDashboardProps {
   onCloseDetails: () => void;
   onPromptSubmit: (prompt: string) => Promise<void>;
   onTransactionComplete: () => void;
+  onBalanceUpdate: (amount: number) => void;
 }
 
 // Dashboard component with enhanced UI
@@ -47,6 +46,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
   onCloseDetails,
   onPromptSubmit,
   onTransactionComplete,
+  onBalanceUpdate,
 }) => {
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [showGlowEffects, setShowGlowEffects] = useState<boolean>(false);
@@ -78,88 +78,33 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           ></div>
         </div>
 
-        <div className="flex items-center justify-between p-4">
-          {/* Logo and Title */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-white from-blue-600 to-indigo-800 shadow-lg">
-              <Image
-                width={20}
-                height={20}
-                alt="Synapse Logo"
-                src={"/synapse-logo.png"}
-              />
-              {showGlowEffects && (
-                <div className="absolute inset-0 rounded-xl bg-blue-500/20 animate-pulse"></div>
-              )}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-                Synapse
-              </h1>
-              <p className="text-xs text-gray-400">
-                Decentralized Agent Payment Protocol
-              </p>
-            </div>
+        {/* Status Bar with Crossmark integration */}
+        <StatusBar
+          balance={balance}
+          network="XRP Testnet"
+          transactionCount={transactions.length}
+          mainAgent={mainAgent}
+          agents={network.nodes}
+          onTransactionComplete={onTransactionComplete}
+          onBalanceUpdate={onBalanceUpdate}
+        />
 
-            {/* Mobile menu toggle */}
-            <button
-              className="block md:hidden ml-4 p-1 rounded-lg bg-gray-800 hover:bg-gray-700"
-              onClick={() => setMobileSidebarOpen(!isMobileSidebarOpen)}
-            >
-              {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-          </div>
-
-          {/* Status Info Pills */}
-          <div className="hidden md:flex items-center gap-3">
-            <div className="group relative px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800 hover:border-gray-600/50">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-b from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex items-center gap-2">
-                <Database size={16} className="text-blue-400" />
-                <div>
-                  <span className="text-gray-400 text-xs">Balance</span>
-                  <div className="font-mono text-sm">
-                    {formatCurrency(balance)}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="group relative px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800 hover:border-gray-600/50">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-b from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex items-center gap-2">
-                <Server size={16} className="text-green-400" />
-                <div>
-                  <span className="text-gray-400 text-xs">Network</span>
-                  <div className="text-sm text-green-400 flex items-center gap-1">
-                    XRP Testnet
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="group relative px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800 hover:border-gray-600/50">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-b from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex items-center gap-2">
-                <FileText size={16} className="text-purple-400" />
-                <div>
-                  <span className="text-gray-400 text-xs">Transactions</span>
-                  <div className="text-sm">{transactions.length}</div>
-                </div>
-              </div>
-            </div>
-
-            {mainAgent && (
-              <StatusBarMenu
-                mainAgent={mainAgent}
-                targetAgents={network.nodes.filter(
-                  (a) => a.id !== mainAgent.id
-                )}
-                onTransactionComplete={onTransactionComplete}
-              />
+        {/* Mobile toggle button */}
+        <div className="md:hidden px-4 py-2 border-t border-gray-700/50 flex justify-center">
+          <button
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 rounded-lg"
+            onClick={() => setMobileSidebarOpen(!isMobileSidebarOpen)}
+          >
+            {isMobileSidebarOpen ? (
+              <>
+                <X size={18} /> Hide Menu
+              </>
+            ) : (
+              <>
+                <Menu size={18} /> Show Menu
+              </>
             )}
-          </div>
+          </button>
         </div>
 
         {/* Mobile Status Bar - Shown only on mobile */}
@@ -192,16 +137,6 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
                 </div>
               </div>
             </div>
-
-            {mainAgent && (
-              <StatusBarMenu
-                mainAgent={mainAgent}
-                targetAgents={network.nodes.filter(
-                  (a) => a.id !== mainAgent.id
-                )}
-                onTransactionComplete={onTransactionComplete}
-              />
-            )}
           </div>
         </div>
       </header>
