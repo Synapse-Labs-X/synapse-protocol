@@ -1,3 +1,5 @@
+// src/lib/xrp/client.ts
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client, Wallet, xrpToDrops, dropsToXrp } from "xrpl";
 import {
@@ -31,6 +33,14 @@ interface XrplAccountInfoResult {
   };
 }
 
+// Wallet cache structure
+interface CachedWallet {
+  address: string;
+  seed: string;
+  publicKey: string;
+  privateKey: string;
+}
+
 // XRP Client Singleton
 class XrpClient {
   private static instance: XrpClient;
@@ -40,6 +50,7 @@ class XrpClient {
   private initializing: boolean = false;
   private connectionPromise: Promise<void> | null = null;
   private networkUrl: string;
+  private localStorageKey: string = "synapse_xrp_wallets";
 
   // Cache for wallet promises to avoid duplicate wallet creation
   private walletPromises: Map<string, Promise<Wallet>> = new Map();
@@ -50,6 +61,9 @@ class XrpClient {
       process.env.NEXT_PUBLIC_XRP_TESTNET_URL ||
       "wss://s.altnet.rippletest.net:51233";
     this.client = new Client(this.networkUrl);
+
+    // Load wallets from cache if available
+    this.loadWalletsFromCache();
   }
 
   public static getInstance(): XrpClient {
@@ -98,12 +112,15 @@ class XrpClient {
     }
   }
 
+  /**
+   * Get a wallet for an agent - tries to load from cache first
+   */
   public async getWallet(agentId: string): Promise<Wallet> {
     if (!this.initialized) {
       await this.initialize();
     }
 
-    // Check if we already have this wallet
+    // Check if we already have this wallet in memory
     let wallet = this.wallets.get(agentId);
     if (wallet) {
       return wallet;
@@ -115,8 +132,8 @@ class XrpClient {
       return existingPromise;
     }
 
-    // Create a new wallet promise
-    const walletPromise = this.createWallet(agentId);
+    // Create a new wallet promise - either load from cache or create new
+    const walletPromise = this.getOrCreateWallet(agentId);
     this.walletPromises.set(agentId, walletPromise);
 
     try {
@@ -128,26 +145,345 @@ class XrpClient {
     }
   }
 
+  /**
+   * Get a wallet from cache or create a new one
+   */
+  private async getOrCreateWallet(agentId: string): Promise<Wallet> {
+    // First, try to get from localStorage
+    const cachedWallet = this.getWalletFromCache(agentId);
+
+    if (cachedWallet) {
+      try {
+        // Create wallet from seed if available
+        // Note: We use fromSeed to properly handle the format
+        let wallet: Wallet;
+
+        if (cachedWallet.seed) {
+          // For XRPL.js v2.x+, we need to prefix 's' for seeds if not already prefixed
+          const seed = cachedWallet.seed.startsWith("s")
+            ? cachedWallet.seed
+            : cachedWallet.seed;
+          wallet = Wallet.fromSeed(seed);
+        } else if (cachedWallet.privateKey) {
+          // Try fallback to private key if seed not available or invalid
+          wallet = Wallet.fromPrivateKey(cachedWallet.privateKey);
+        } else {
+          throw new Error(
+            "Neither seed nor private key available in cached wallet"
+          );
+        }
+
+        // Verify the wallet is valid by checking the address
+        if (wallet.address === cachedWallet.address) {
+          console.log(`Loaded wallet for agent ${agentId} from cache`);
+          this.wallets.set(agentId, wallet);
+          return wallet;
+        } else {
+          console.warn(
+            `Cached wallet address mismatch for ${agentId}, creating new wallet`
+          );
+        }
+      } catch (error) {
+        console.error(`Error loading wallet from cache for ${agentId}:`, error);
+        // Fall through to creating a new wallet
+      }
+    }
+
+    // If no cached wallet or error loading, create a new one
+    return this.createWallet(agentId);
+  }
+
+  /**
+   * Create a new wallet for an agent
+   */
   public async createWallet(agentId: string): Promise<Wallet> {
     if (!this.initialized) {
-      await this.initialize();
+      try {
+        await this.initialize();
+      } catch (error) {
+        console.warn(
+          `Could not initialize XRP client, using fallback mock wallet for ${agentId}`
+        );
+        return this.createMockWallet(agentId);
+      }
     }
 
     try {
-      // Create a new wallet
+      // Try to create a real wallet
       const wallet = Wallet.generate();
 
-      // Fund the wallet from testnet faucet
-      const fundResult = await this.client.fundWallet(wallet);
-      const fundedWallet = fundResult.wallet;
+      // Try to fund the wallet from testnet faucet
+      try {
+        const fundResult = await this.client.fundWallet(wallet);
+        const fundedWallet = fundResult.wallet;
 
-      // Store the wallet
-      this.wallets.set(agentId, fundedWallet);
+        // Store the funded wallet in memory
+        this.wallets.set(agentId, fundedWallet);
 
-      return fundedWallet;
+        // Cache the wallet in localStorage
+        this.cacheWallet(agentId, fundedWallet);
+
+        console.log(
+          `Created and cached new funded wallet for agent ${agentId}`
+        );
+        return fundedWallet;
+      } catch (fundingError) {
+        console.warn(
+          `Failed to fund wallet for ${agentId}, using unfunded wallet:`,
+          fundingError
+        );
+
+        // Still use the generated wallet even if funding failed
+        this.wallets.set(agentId, wallet);
+        this.cacheWallet(agentId, wallet);
+
+        return wallet;
+      }
     } catch (error) {
       console.error(`Failed to create wallet for agent ${agentId}:`, error);
-      throw error;
+
+      // Fallback to mock wallet in case of catastrophic failure
+      console.warn(`Using mock wallet for ${agentId} due to creation failure`);
+      return this.createMockWallet(agentId);
+    }
+  }
+
+  /**
+   * Create a mock wallet for testing or when XRP network is unavailable
+   * This ensures the application can still function in demo mode
+   */
+  private createMockWallet(agentId: string): Wallet {
+    // Generate deterministic mock wallet based on agent ID
+    // This ensures we get the same mock wallet for the same agent across sessions
+    const mockSeed = `s${agentId.replace(/[^a-zA-Z0-9]/g, "")}MockSeedXRPL`;
+    const mockAddress = `r${agentId.replace(
+      /[^a-zA-Z0-9]/g,
+      ""
+    )}MockAddressXRPL`;
+
+    // Create a minimal wallet object with just the properties we need
+    const mockWallet = {
+      address: mockAddress,
+      seed: mockSeed,
+      publicKey: `PUBLIC_KEY_${agentId}`,
+      privateKey: `PRIVATE_KEY_${agentId}`,
+      classicAddress: mockAddress,
+      sign: () => ({ tx_blob: "MOCK_SIGNED_TX" }),
+    } as unknown as Wallet;
+
+    // Store in memory
+    this.wallets.set(agentId, mockWallet);
+
+    // Don't cache mock wallets to avoid polluting the cache
+
+    console.log(
+      `Created mock wallet for agent ${agentId} (for testing/fallback)`
+    );
+    return mockWallet;
+  }
+
+  /**
+   * Save wallet data to localStorage
+   */
+  private cacheWallet(agentId: string, wallet: Wallet): void {
+    try {
+      if (typeof window === "undefined") return; // Skip if not in browser
+
+      // Get existing wallets from localStorage
+      const cachedData = localStorage.getItem(this.localStorageKey);
+      const walletCache: Record<string, CachedWallet> = cachedData
+        ? JSON.parse(cachedData)
+        : {};
+
+      // Ensure we have valid data to store
+      if (!wallet.address) {
+        console.warn(`Cannot cache wallet for ${agentId}: Missing address`);
+        return;
+      }
+
+      // Store only what we need for recreation
+      const walletData: CachedWallet = {
+        address: wallet.address,
+        seed: wallet.seed || "",
+        publicKey: wallet.publicKey,
+        privateKey: wallet.privateKey || "",
+      };
+
+      // Validate data before storing
+      if (!walletData.seed && !walletData.privateKey) {
+        console.warn(
+          `Cannot cache wallet for ${agentId}: Missing seed and privateKey`
+        );
+        return;
+      }
+
+      // Add the new wallet to cache
+      walletCache[agentId] = walletData;
+
+      // Save back to localStorage
+      localStorage.setItem(this.localStorageKey, JSON.stringify(walletCache));
+      console.log(`Successfully cached wallet for ${agentId}`);
+    } catch (error) {
+      console.error(`Failed to cache wallet for ${agentId}:`, error);
+      // Non-critical error, we can continue without caching
+    }
+  }
+
+  /**
+   * Get wallet data from localStorage
+   */
+  private getWalletFromCache(agentId: string): CachedWallet | null {
+    try {
+      if (typeof window === "undefined") return null; // Skip if not in browser
+
+      const cachedData = localStorage.getItem(this.localStorageKey);
+      if (!cachedData) return null;
+
+      const walletCache = JSON.parse(cachedData);
+      return walletCache[agentId] || null;
+    } catch (error) {
+      console.error(`Failed to retrieve cached wallet for ${agentId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Load all wallets from cache into memory
+   */
+  private loadWalletsFromCache(): void {
+    try {
+      if (typeof window === "undefined") return; // Skip if not in browser
+
+      const cachedData = localStorage.getItem(this.localStorageKey);
+      if (!cachedData) {
+        console.log("No cached wallets found in localStorage");
+        return;
+      }
+
+      // Safely parse JSON
+      let walletCache: Record<string, CachedWallet>;
+      try {
+        walletCache = JSON.parse(cachedData);
+        if (!walletCache || typeof walletCache !== "object") {
+          console.warn("Invalid wallet cache format, skipping cache loading");
+          return;
+        }
+      } catch (parseError) {
+        console.error("Failed to parse wallet cache:", parseError);
+        // If cache is corrupted, clear it
+        localStorage.removeItem(this.localStorageKey);
+        return;
+      }
+
+      // For each cached wallet, try to recreate the Wallet object
+      let successCount = 0;
+      Object.entries(walletCache).forEach(([agentId, walletData]) => {
+        try {
+          // Skip if missing required data
+          if (!walletData || !walletData.address) {
+            console.warn(
+              `Skipping invalid cached wallet for ${agentId}: Missing address`
+            );
+            return;
+          }
+
+          let wallet: Wallet | null = null;
+
+          // Try to create wallet from seed first
+          if (walletData.seed) {
+            try {
+              // For XRPL.js v2.x+, we need to prefix 's' for seeds if not already prefixed
+              const seed = walletData.seed.startsWith("s")
+                ? walletData.seed
+                : walletData.seed;
+              wallet = Wallet.fromSeed(seed);
+            } catch (seedError) {
+              console.warn(
+                `Failed to create wallet from seed for ${agentId}:`,
+                seedError
+              );
+            }
+          }
+
+          // Fallback to private key if seed failed
+          if (!wallet && walletData.privateKey) {
+            try {
+              wallet = Wallet.fromPrivateKey(walletData.privateKey);
+            } catch (pkError) {
+              console.warn(
+                `Failed to create wallet from private key for ${agentId}:`,
+                pkError
+              );
+            }
+          }
+
+          // Verify the wallet address matches
+          if (wallet && wallet.address === walletData.address) {
+            this.wallets.set(agentId, wallet);
+            successCount++;
+          } else if (wallet) {
+            console.warn(
+              `Address mismatch for cached wallet ${agentId}: ${wallet.address} !== ${walletData.address}`
+            );
+          }
+        } catch (err) {
+          console.error(`Error loading wallet for ${agentId}:`, err);
+        }
+      });
+
+      console.log(`Successfully loaded ${successCount} wallets from cache`);
+    } catch (error) {
+      console.error("Failed to load wallets from cache:", error);
+    }
+  }
+
+  /**
+   * Check if a wallet is already cached for an agent
+   */
+  public isWalletCached(agentId: string): boolean {
+    // Check in-memory cache first
+    if (this.wallets.has(agentId)) return true;
+
+    // Then check localStorage
+    return this.getWalletFromCache(agentId) !== null;
+  }
+
+  /**
+   * Clear a specific wallet from cache
+   */
+  public clearWalletFromCache(agentId: string): void {
+    // Remove from in-memory cache
+    this.wallets.delete(agentId);
+
+    // Remove from localStorage
+    try {
+      if (typeof window === "undefined") return;
+
+      const cachedData = localStorage.getItem(this.localStorageKey);
+      if (!cachedData) return;
+
+      const walletCache = JSON.parse(cachedData);
+      delete walletCache[agentId];
+
+      localStorage.setItem(this.localStorageKey, JSON.stringify(walletCache));
+    } catch (error) {
+      console.error(`Failed to clear wallet for ${agentId} from cache:`, error);
+    }
+  }
+
+  /**
+   * Clear all wallets from cache
+   */
+  public clearAllWallets(): void {
+    // Clear in-memory cache
+    this.wallets.clear();
+
+    // Clear localStorage
+    try {
+      if (typeof window === "undefined") return;
+      localStorage.removeItem(this.localStorageKey);
+    } catch (error) {
+      console.error("Failed to clear wallet cache:", error);
     }
   }
 

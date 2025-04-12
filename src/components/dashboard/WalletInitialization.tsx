@@ -1,12 +1,21 @@
+// src/components/dashboard/WalletInitialization.tsx
+
 "use client";
 
 import React from "react";
-import { Wallet, ShieldCheck, AlertCircle, CheckCircle } from "lucide-react";
+import {
+  Wallet,
+  ShieldCheck,
+  AlertCircle,
+  CheckCircle,
+  Database,
+} from "lucide-react";
 
 interface WalletInitializationProps {
   initialized: string[];
   pending: string[];
   failed: string[];
+  cached: string[]; // New field for cached wallets
   progress: number;
   agentNames: Record<string, string>;
 }
@@ -15,6 +24,7 @@ const WalletInitialization: React.FC<WalletInitializationProps> = ({
   initialized,
   pending,
   failed,
+  cached,
   progress,
   agentNames,
 }) => {
@@ -30,7 +40,9 @@ const WalletInitialization: React.FC<WalletInitializationProps> = ({
               Initializing Wallets
             </h2>
             <p className="text-gray-400 text-sm">
-              Pre-authorizing agent wallets for faster transactions
+              {cached.length > 0
+                ? `Loading ${cached.length} cached wallets and initializing remaining wallets`
+                : "Pre-authorizing agent wallets for faster transactions"}
             </p>
           </div>
         </div>
@@ -49,6 +61,19 @@ const WalletInitialization: React.FC<WalletInitializationProps> = ({
           </div>
         </div>
 
+        {/* Cache status */}
+        {cached.length > 0 && (
+          <div className="mb-4 bg-blue-900/10 rounded-lg p-3 border border-blue-800/20">
+            <div className="flex items-center">
+              <Database size={16} className="text-blue-400 mr-2" />
+              <span className="text-sm text-blue-300">
+                {cached.length} {cached.length === 1 ? "wallet" : "wallets"}{" "}
+                loaded from cache
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Agent initialization status */}
         <div className="mt-4 bg-gray-900/50 rounded-lg p-4 max-h-60 overflow-y-auto">
           <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center">
@@ -61,12 +86,19 @@ const WalletInitialization: React.FC<WalletInitializationProps> = ({
             {initialized.map((agentId) => (
               <div
                 key={`init-${agentId}`}
-                className="flex items-center p-2 rounded-lg bg-gray-800/50 border border-green-900/30"
+                className="flex justify-between items-center p-2 rounded-lg bg-gray-800/50 border border-green-900/30"
               >
-                <CheckCircle size={16} className="text-green-500 mr-2" />
-                <span className="text-sm">
-                  {agentNames[agentId] || agentId}
-                </span>
+                <div className="flex items-center">
+                  <CheckCircle size={16} className="text-green-500 mr-2" />
+                  <span className="text-sm">
+                    {agentNames[agentId] || agentId}
+                  </span>
+                </div>
+                {cached.includes(agentId) && (
+                  <span className="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded-full border border-blue-800/30">
+                    Cached
+                  </span>
+                )}
               </div>
             ))}
 
@@ -74,14 +106,17 @@ const WalletInitialization: React.FC<WalletInitializationProps> = ({
             {pending.map((agentId) => (
               <div
                 key={`pending-${agentId}`}
-                className="flex items-center p-2 rounded-lg bg-gray-800/50 border border-blue-900/30"
+                className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 border border-blue-900/30"
               >
-                <div className="w-4 h-4 mr-2 relative flex items-center justify-center">
-                  <div className="absolute w-full h-full border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 mr-2 relative flex items-center justify-center">
+                    <div className="absolute w-full h-full border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <span className="text-sm">
+                    {agentNames[agentId] || agentId}
+                  </span>
                 </div>
-                <span className="text-sm">
-                  {agentNames[agentId] || agentId}
-                </span>
+                <span className="text-xs text-blue-400">Initializing</span>
               </div>
             ))}
 
@@ -89,13 +124,15 @@ const WalletInitialization: React.FC<WalletInitializationProps> = ({
             {failed.map((agentId) => (
               <div
                 key={`failed-${agentId}`}
-                className="flex items-center p-2 rounded-lg bg-gray-800/50 border border-red-900/30"
+                className="flex items-center justify-between p-2 rounded-lg bg-gray-800/50 border border-red-900/30"
               >
-                <AlertCircle size={16} className="text-red-500 mr-2" />
-                <span className="text-sm">
-                  {agentNames[agentId] || agentId}
-                </span>
-                <span className="text-xs text-red-400 ml-auto">Failed</span>
+                <div className="flex items-center">
+                  <AlertCircle size={16} className="text-red-500 mr-2" />
+                  <span className="text-sm">
+                    {agentNames[agentId] || agentId}
+                  </span>
+                </div>
+                <span className="text-xs text-red-400">Failed</span>
               </div>
             ))}
           </div>
@@ -118,6 +155,27 @@ const WalletInitialization: React.FC<WalletInitializationProps> = ({
             </p>
           )}
         </div>
+
+        {/* Cache statistics */}
+        {initialized.length > 0 && (
+          <div className="mt-4 flex items-center justify-between p-3 bg-gray-900/60 rounded-lg text-xs text-gray-400 border border-gray-700/50">
+            <div className="flex items-center">
+              <Database size={14} className="text-blue-400 mr-1" />
+              <span>From cache: </span>
+              <span className="text-blue-400 ml-1">
+                {cached.length}/
+                {initialized.length + pending.length + failed.length}
+              </span>
+            </div>
+            <div className="flex items-center">
+              <Wallet size={14} className="text-green-400 mr-1" />
+              <span>Newly created: </span>
+              <span className="text-green-400 ml-1">
+                {initialized.length - cached.length}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
