@@ -202,7 +202,7 @@ const CrossmarkWalletSDK: React.FC<CrossmarkWalletSDKProps> = ({
       {isModalOpen &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
             <div className="bg-gray-800 rounded-lg w-full max-w-md shadow-xl overflow-hidden">
               <div className="flex justify-between items-center p-4 border-b border-gray-700">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
