@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";

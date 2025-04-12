@@ -24,7 +24,6 @@ const UserWalletButton: React.FC<UserWalletButtonProps> = ({
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    console.log(isMobile);
     if (isMobile) return;
     const checkWallet = async () => {
       await walletService.initialize();
@@ -32,7 +31,7 @@ const UserWalletButton: React.FC<UserWalletButtonProps> = ({
       setIsWalletConnected(await walletService.isWalletConnected());
     };
     checkWallet();
-  }, []);
+  }, [isMobile]);
 
   const handleOpenModal = async () => {
     if (isCrossmarkInstalled && !isWalletConnected) {

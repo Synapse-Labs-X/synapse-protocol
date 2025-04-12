@@ -180,7 +180,7 @@ export default function DashboardPage() {
 
     // Simulate loading delay with a modern loading animation
     const loadTimer = setTimeout(async () => {
-      var walletAddress = "";
+      let walletAddress = "";
       if (!isMobile)
         walletAddress = (await walletService.getWalletAddress()) || "";
       const initialNodes: Agent[] = [

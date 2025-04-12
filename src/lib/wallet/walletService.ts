@@ -15,8 +15,12 @@ class WalletService {
   }
 
   public isCrossmarkInstalled(): boolean {
-    // For Crossmark, we rely on sdk.sync.isInstalled() within its client.
-    return this.crossmark.isInstalled();
+    try {
+      return this.crossmark.isInstalled();
+    } catch (error) {
+      console.log("Error checking Crossmark installation:", error);
+      return false;
+    }
   }
 
   public async isWalletConnected(): Promise<boolean> {

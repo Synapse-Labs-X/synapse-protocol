@@ -105,37 +105,38 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
             return (
               <div
                 key={tx.id}
-                className="group bg-gray-800/40 backdrop-blur-sm hover:bg-gray-800/60 rounded-xl p-3 border border-gray-700/50 transition-all duration-300 hover:border-gray-600/70"
+                className="group relative bg-gray-800/40 backdrop-blur-sm hover:bg-gray-800/60 rounded-xl p-3 border border-gray-700/50 transition-all duration-300 hover:border-gray-600/70"
               >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    <div className="bg-blue-900/50 backdrop-blur-sm p-2 rounded-full border border-blue-800/50">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="bg-blue-900/50 backdrop-blur-sm p-2 rounded-full border border-blue-800/50 flex-shrink-0">
                       <Zap size={16} className="text-blue-400" />
                     </div>
-                    <div className="ml-3">
-                      <div className="text-sm flex items-center space-x-2">
-                        <span className="flex items-center gap-1">
+
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm flex flex-col xs:flex-row xs:items-center xs:flex-wrap gap-1 xs:gap-2">
+                        <span className="flex items-center gap-1 flex-wrap">
                           <span
                             style={{ color: fromColor }}
-                            className="font-medium"
+                            className="font-medium truncate"
                           >
                             {getAgentName(tx.from)}
                           </span>
 
                           <ArrowRight
                             size={12}
-                            className="text-gray-500 mx-0.5"
+                            className="text-gray-500 mx-0.5 flex-shrink-0"
                           />
 
                           <span
                             style={{ color: toColor }}
-                            className="font-medium"
+                            className="font-medium truncate"
                           >
                             {getAgentName(tx.to)}
                           </span>
                         </span>
 
-                        <div className="inline-flex">
+                        <div className="flex-shrink-0">
                           {tx.status === "confirmed" ? (
                             <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-green-900/30 text-green-400 border border-green-800/30">
                               {getStatusIcon(tx.status)}
@@ -154,14 +155,15 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                           )}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-500 flex items-center mt-1">
-                        {formatTime(tx.timestamp)}
+
+                      <div className="text-xs text-gray-500 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-1">
+                        <span>{formatTime(tx.timestamp)}</span>
                         {tx.xrpTxHash && (
                           <a
                             href={`https://testnet.xrpl.org/transactions/${tx.xrpTxHash}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="ml-2 flex items-center text-blue-400 hover:text-blue-300 transition-colors"
+                            className="flex items-center text-blue-400 hover:text-blue-300 transition-colors"
                           >
                             <ExternalLink size={10} className="mr-1" />
                             View on XRP Ledger
@@ -170,7 +172,8 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className="font-mono text-yellow-400 font-medium">
+
+                  <div className="font-mono text-yellow-400 font-medium text-right sm:text-left">
                     {formatCurrency(tx.amount)}
                   </div>
                 </div>

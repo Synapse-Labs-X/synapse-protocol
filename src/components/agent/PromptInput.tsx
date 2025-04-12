@@ -165,6 +165,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
                 className={`bg-transparent px-4 pt-4 pb-12 text-white w-full transition-all duration-300 min-h-[120px] resize-none focus:outline-none z-10 relative`}
                 style={{
                   minHeight: isExpanded ? "180px" : "120px",
+                  maxHeight: "300px", // Set max height for better mobile experience
                 }}
               />
             </div>
@@ -271,7 +272,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
               {
                 id: "text-gen-1",
@@ -341,7 +342,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
 
       {/* Selected Agents Display - with floating-card design */}
       {selectedAgents.length > 0 && (
-        <div className="mt-4 bg-gray-800/60 backdrop-blur-lg border border-gray-700/50 rounded-xl p-4 shadow-lg transition-all duration-500 animate-fadeIn">
+        <div className="mt-4 bg-gray-800/60 backdrop-blur-lg border border-gray-700/50 rounded-xl p-4 shadow-lg transition-all duration-500 animate-fadeIn overflow-x-auto">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-medium text-blue-300 flex items-center">
               <Activity size={14} className="mr-1" />

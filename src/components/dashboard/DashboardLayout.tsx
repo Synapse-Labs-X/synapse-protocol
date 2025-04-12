@@ -1,15 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  Zap,
-  Activity,
-  ExternalLink,
-  Menu,
-  X,
-  Database,
-  Shield,
-  FileText,
-} from "lucide-react";
-import { formatCurrency } from "@/lib/utils/formatters";
+import { Zap, Activity, ExternalLink, Shield } from "lucide-react";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
 import AgentNetwork from "@/components/network/AgentNetwork";
@@ -54,7 +44,6 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
   onBalanceUpdate,
   isMobile = false,
 }) => {
-  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [showGlowEffects, setShowGlowEffects] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>("network");
 
@@ -96,57 +85,6 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           walletStatus={walletStatus}
           hideCrossmark={isMobile}
         />
-
-        {/* Mobile toggle button */}
-        <div className="md:hidden px-4 py-2 border-t border-gray-700/50 flex justify-center">
-          <button
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 rounded-lg"
-            onClick={() => setMobileSidebarOpen(!isMobileSidebarOpen)}
-          >
-            {isMobileSidebarOpen ? (
-              <>
-                <X size={18} /> Hide Menu
-              </>
-            ) : (
-              <>
-                <Menu size={18} /> Show Menu
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Mobile Status Bar - Shown only on mobile */}
-        <div
-          className={`md:hidden transition-all duration-300 overflow-hidden ${
-            isMobileSidebarOpen ? "max-h-96" : "max-h-0"
-          }`}
-        >
-          <div className="p-4 space-y-3 bg-gray-800/30 backdrop-blur-md">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1 px-3 py-2 rounded-lg bg-gray-800/70 border border-gray-700/50">
-                <div className="flex items-center gap-2">
-                  <Database size={16} className="text-blue-400" />
-                  <div>
-                    <span className="text-gray-400 text-xs">Balance</span>
-                    <div className="font-mono text-sm">
-                      {formatCurrency(balance)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 px-3 py-2 rounded-lg bg-gray-800/70 border border-gray-700/50">
-                <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-purple-400" />
-                  <div>
-                    <span className="text-gray-400 text-xs">Transactions</span>
-                    <div className="text-sm">{transactions.length}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </header>
 
       {/* Main Content with improved grid-based layout */}
@@ -166,42 +104,9 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
 
         {/* Mobile content - Simple tabs for mobile view */}
         <div className="md:hidden w-full flex flex-col">
-          <div className="border-b border-gray-700/50 flex items-center">
-            <button
-              className={`flex-1 py-2 text-center text-sm font-medium ${
-                activeTab === "network"
-                  ? "text-blue-400 border-b-2 border-blue-400"
-                  : "text-gray-400"
-              }`}
-              onClick={() => setActiveTab("network")}
-            >
-              Network
-            </button>
-            <button
-              className={`flex-1 py-2 text-center text-sm font-medium ${
-                activeTab === "transactions"
-                  ? "text-blue-400 border-b-2 border-blue-400"
-                  : "text-gray-400"
-              }`}
-              onClick={() => setActiveTab("transactions")}
-            >
-              Transactions
-            </button>
-            <button
-              className={`flex-1 py-2 text-center text-sm font-medium ${
-                activeTab === "prompt"
-                  ? "text-blue-400 border-b-2 border-blue-400"
-                  : "text-gray-400"
-              }`}
-              onClick={() => setActiveTab("prompt")}
-            >
-              Prompt
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto h-full">
             {activeTab === "network" && (
-              <div className="h-64 md:h-full">
+              <div className="h-full">
                 <AgentNetwork
                   network={network}
                   onNodeClick={onAgentSelect}
@@ -278,44 +183,46 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
 
           {/* Right Panel - 4 columns with auto-grid layout for sections */}
           <div className="col-span-4 flex flex-col overflow-hidden bg-gray-800/10">
-            {/* Agent Interaction */}
-            <div className="p-4 relative border-b border-gray-700/50">
-              <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg overflow-hidden transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
-                {showGlowEffects && (
-                  <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-70 blur-sm"></div>
-                )}
-                <div className="p-4">
-                  <PromptInput
-                    onSubmit={onPromptSubmit}
-                    selectedAgents={selectedAgents}
-                    isProcessing={processing}
-                  />
+            <div className="flex-1 flex flex-col overflow-y-scroll">
+              {/* Agent Interaction */}
+              <div className="p-4 relative border-b border-gray-700/50">
+                <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg overflow-hidden transition-all duration-300 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]">
+                  {showGlowEffects && (
+                    <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-70 blur-sm"></div>
+                  )}
+                  <div className="p-4">
+                    <PromptInput
+                      onSubmit={onPromptSubmit}
+                      selectedAgents={selectedAgents}
+                      isProcessing={processing}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Transactions */}
-            <div className="flex-1 overflow-auto">
-              <div className="p-4 h-full">
-                <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg p-4 transition-all duration-300 h-full hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] overflow-hidden flex flex-col">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                      Recent Transactions
-                    </h2>
-                    <a
-                      href="#"
-                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                    >
-                      View All <ExternalLink size={12} />
-                    </a>
-                  </div>
+              {/* Transactions */}
+              <div className="flex-1 overflow-y-visible sm:max-h-96 max-h-none">
+                <div className="p-4 h-full">
+                  <div className="rounded-xl bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 shadow-lg p-4 transition-all duration-300 h-full hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] overflow-hidden flex flex-col">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h2 className="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                        Recent Transactions
+                      </h2>
+                      <a
+                        href="#"
+                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                      >
+                        View All <ExternalLink size={12} />
+                      </a>
+                    </div>
 
-                  {/* TransactionHistory component with scrollable container */}
-                  <div className="flex-1 overflow-y-auto pr-1">
-                    <TransactionHistory
-                      transactions={transactions}
-                      agents={network.nodes}
-                    />
+                    {/* TransactionHistory component with scrollable container */}
+                    <div className="flex-1 overflow-y-auto pr-1">
+                      <TransactionHistory
+                        transactions={transactions}
+                        agents={network.nodes}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
