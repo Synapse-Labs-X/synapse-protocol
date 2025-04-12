@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import AgentNetwork from "@/components/dashboard/AgentNetwork";
+import AgentNetwork from "@/components/dashboard/AgentNetwork"; // Import our enhanced component
+import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
+import { Transaction } from "@/types/transaction";
+import StatusBar from "@/components/dashboard/StatusBar";
 import AgentDetails from "@/components/dashboard/AgentDetails";
 import PromptInput from "@/components/dashboard/PromptInput";
 import TransactionHistory from "@/components/dashboard/TransactionHistory";
-import StatusBar from "@/components/dashboard/StatusBar";
-import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
-import { Transaction } from "@/types/transaction";
 import { analyzePrompt } from "@/lib/agents/analysis";
 import { executeTransactions } from "@/lib/agents/orchestrator";
 import { Zap } from "lucide-react";
@@ -22,7 +22,7 @@ export default function DashboardPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
   const [processing, setProcessing] = useState<boolean>(false);
-  const [balance, setBalance] = useState<number>(1000); // Initial RLUSD balance
+  const [balance, setBalance] = useState<number>(995); // Starting balance
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasMounted, setHasMounted] = useState<boolean>(false);
 
@@ -31,7 +31,7 @@ export default function DashboardPage() {
     setHasMounted(true);
   }, []);
 
-  // Initialize mock network data
+  // Initialize network data
   useEffect(() => {
     if (!hasMounted) return;
 
@@ -42,23 +42,17 @@ export default function DashboardPage() {
           id: "main-agent",
           name: "Orchestrator Agent",
           type: "main",
-          balance: 1000,
+          balance: 995,
           cost: 0,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Central orchestration agent that routes tasks and manages payment flows between specialized AI agents.",
         },
         {
           id: "text-gen-1",
           name: "Text Generator",
           type: "text",
-          balance: 0,
+          balance: 5,
           cost: 5,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Generates high-quality text content based on input prompts.",
         },
         {
           id: "image-gen-1",
@@ -67,9 +61,6 @@ export default function DashboardPage() {
           balance: 0,
           cost: 10,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Creates visual content and imagery based on text descriptions.",
         },
         {
           id: "data-analyzer",
@@ -78,9 +69,6 @@ export default function DashboardPage() {
           balance: 0,
           cost: 7,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Processes and analyzes datasets to extract insights and visualizations.",
         },
         {
           id: "research-assistant",
@@ -89,9 +77,6 @@ export default function DashboardPage() {
           balance: 0,
           cost: 8,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Performs comprehensive research on topics and provides organized findings.",
         },
         {
           id: "code-generator",
@@ -100,9 +85,6 @@ export default function DashboardPage() {
           balance: 0,
           cost: 6,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Writes code in various programming languages based on functional requirements.",
         },
         {
           id: "translator",
@@ -111,9 +93,6 @@ export default function DashboardPage() {
           balance: 0,
           cost: 4,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Translates content between different languages while preserving meaning and nuance.",
         },
         {
           id: "summarizer",
@@ -122,24 +101,38 @@ export default function DashboardPage() {
           balance: 0,
           cost: 3,
           status: "active",
-          lastActive: new Date().toISOString(),
-          description:
-            "Condenses long-form content into concise summaries while preserving key information.",
         },
       ];
 
-      // Initial connections
+      // Initial connections - primarily from main agent to others
       const initialLinks = [
-        { source: "main-agent", target: "text-gen-1", value: 0 },
+        { source: "main-agent", target: "text-gen-1", value: 1 },
         { source: "main-agent", target: "image-gen-1", value: 0 },
         { source: "main-agent", target: "data-analyzer", value: 0 },
         { source: "main-agent", target: "research-assistant", value: 0 },
         { source: "main-agent", target: "code-generator", value: 0 },
         { source: "main-agent", target: "translator", value: 0 },
         { source: "main-agent", target: "summarizer", value: 0 },
+        // Some agent-to-agent connections for demonstration
+        { source: "text-gen-1", target: "summarizer", value: 0.5 },
+        { source: "data-analyzer", target: "code-generator", value: 0.3 },
       ];
 
+      // Initial transaction
+      const initialTransaction: Transaction = {
+        id: "initial-tx-001",
+        from: "main-agent",
+        to: "text-gen-1",
+        amount: 5,
+        currency: "RLUSD",
+        timestamp: new Date().toISOString(),
+        status: "confirmed",
+        type: "payment",
+        memo: "Initial balance allocation",
+      };
+
       setNetwork({ nodes: initialNodes, links: initialLinks });
+      setTransactions([initialTransaction]);
       setIsLoading(false);
     }, 1500);
 
@@ -241,9 +234,8 @@ export default function DashboardPage() {
     newTransactions: Transaction[]
   ) => {
     setNetwork((prevNetwork) => {
-      // Deep clone to avoid direct state mutation
+      // Update nodes with new balances
       const updatedNodes = [...prevNetwork.nodes].map((node) => {
-        // Update node balances
         if (node.id === "main-agent") {
           return {
             ...node,
@@ -261,33 +253,21 @@ export default function DashboardPage() {
         return node;
       });
 
+      // Update links with new transaction values
       const updatedLinks = [...prevNetwork.links].map((link) => {
-        if (typeof link.source === "object") {
-          // Handle case where link.source is already an object
-          if (
-            link.source.id === "main-agent" &&
-            agentIds.includes(
-              typeof link.target === "object"
-                ? link.target.id
-                : (link.target as string)
-            )
-          ) {
-            return {
-              ...link,
-              value: (link.value as number) + 1,
-            };
-          }
-        } else {
-          // Handle case where link.source is a string
-          if (
-            link.source === "main-agent" &&
-            agentIds.includes(link.target as string)
-          ) {
-            return {
-              ...link,
-              value: (link.value as number) + 1,
-            };
-          }
+        const source =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const target =
+          typeof link.target === "object" ? link.target.id : link.target;
+
+        if (
+          (source === "main-agent" && agentIds.includes(target)) ||
+          (target === "main-agent" && agentIds.includes(source))
+        ) {
+          return {
+            ...link,
+            value: (link.value as number) + 1,
+          };
         }
         return link;
       });
@@ -299,7 +279,7 @@ export default function DashboardPage() {
     });
   };
 
-  // Handler for agent selection in the network graph
+  // Handler for agent selection
   const handleAgentSelect = (agent: Agent) => {
     setSelectedAgent(agent);
   };
@@ -309,18 +289,14 @@ export default function DashboardPage() {
     setSelectedAgent(null);
   };
 
-  // Show loading state while mounting or initializing data
+  // Show loading state while initializing
   if (!hasMounted || isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">
           <Zap size={36} className="text-yellow-400 mx-auto mb-4" />
           <div className="w-16 h-16 border-t-4 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-white">
-            {!hasMounted
-              ? "Initializing Synapse..."
-              : "Loading Synapse Dashboard..."}
-          </p>
+          <p className="mt-4 text-white">Loading Synapse Dashboard...</p>
         </div>
       </div>
     );
@@ -328,7 +304,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
-      {/* Header with Status Bar */}
+      {/* Status Bar */}
       <StatusBar
         balance={balance}
         network="XRP Testnet"

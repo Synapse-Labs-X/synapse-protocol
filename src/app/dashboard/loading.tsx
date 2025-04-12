@@ -11,11 +11,29 @@ export default function Loading() {
         </div>
 
         <div className="relative h-24 w-24 mx-auto mb-8">
-          {/* Main spinner */}
-          <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          {/* Main spinner - using separate animation properties instead of shorthand */}
+          <div
+            className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full"
+            style={{
+              animationName: "spin",
+              animationDuration: "1s",
+              animationTimingFunction: "linear",
+              animationIterationCount: "infinite",
+            }}
+          ></div>
 
-          {/* Secondary spinner (slower, opposite direction) */}
-          <div className="absolute inset-2 border-4 border-yellow-400 border-b-transparent rounded-full animation-delay-500 animate-[spin_2s_linear_infinite_reverse]"></div>
+          {/* Secondary spinner - using separate animation properties */}
+          <div
+            className="absolute inset-2 border-4 border-yellow-400 border-b-transparent rounded-full"
+            style={{
+              animationName: "spin",
+              animationDuration: "2s",
+              animationTimingFunction: "linear",
+              animationIterationCount: "infinite",
+              animationDirection: "reverse",
+              animationDelay: "0.5s",
+            }}
+          ></div>
 
           {/* Central circle */}
           <div className="absolute inset-5 rounded-full bg-gray-800 flex items-center justify-center">
@@ -46,7 +64,15 @@ export default function Loading() {
 
           <div className="flex items-center">
             <span className="w-5 h-5 rounded-full border border-gray-500 flex items-center justify-center mr-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <div
+                className="w-2 h-2 bg-blue-500 rounded-full"
+                style={{
+                  animationName: "pulse",
+                  animationDuration: "2s",
+                  animationTimingFunction: "ease",
+                  animationIterationCount: "infinite",
+                }}
+              ></div>
             </span>
             <span className="text-sm text-gray-300">
               Connecting to XRP Testnet

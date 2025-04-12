@@ -1,16 +1,10 @@
-"use client";
-
-import React, { useRef, useEffect, useState, JSX } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import {
-  Agent,
-  AgentNetwork as AgentNetworkType,
-  AgentType,
-} from "@/types/agent";
+import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Cpu, Bot, BarChart2, Layers, MessageSquare } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
 
-// Import ForceGraph2D with no SSR
+// Import ForceGraph2D with no SSR to avoid hydration issues
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
 });
@@ -22,7 +16,7 @@ interface AgentNetworkProps {
   processingTransaction?: boolean;
 }
 
-// To safely handle force graph typing
+// Extended Graph Node type to handle force graph properties
 interface GraphNode extends Agent {
   id: string;
   x?: number;
@@ -41,25 +35,15 @@ interface GraphLink {
   index?: number;
 }
 
-// Extended network type for force graph
-interface ForceGraphData {
-  nodes: GraphNode[];
-  links: GraphLink[];
-}
-
-const AgentNetwork: React.FC<AgentNetworkProps> = ({
+const AgentNetwork = ({
   network,
   onNodeClick,
   selectedAgents = [],
   processingTransaction = false,
-}) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const graphRef = useRef<any>(null);
+}: AgentNetworkProps) => {
+  const graphRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [graphData, setGraphData] = useState<ForceGraphData>({
-    nodes: [],
-    links: [],
-  });
+  const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [hasMounted, setHasMounted] = useState(false);
 
   // Set mounted state
@@ -67,33 +51,63 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     setHasMounted(true);
   }, []);
 
-  // Convert network data to format expected by ForceGraph2D
+  // Create all-to-all connections between agents
   useEffect(() => {
     if (!hasMounted) return;
 
-    const nodes: GraphNode[] = network.nodes.map((node) => ({
+    const nodes = network.nodes.map((node) => ({
       ...node,
     }));
 
-    const links: GraphLink[] = network.links.map((link) => ({
-      source: typeof link.source === "string" ? link.source : link.source.id,
-      target: typeof link.target === "string" ? link.target : link.target.id,
-      value: link.value,
-    }));
+    // Create links for all-to-all connections
+    const allLinks = [];
 
-    setGraphData({ nodes, links });
+    // First add existing links from the network
+    network.links.forEach((link) => {
+      allLinks.push({
+        source: typeof link.source === "string" ? link.source : link.source.id,
+        target: typeof link.target === "string" ? link.target : link.target.id,
+        value: link.value || 1,
+      });
+    });
+
+    // Add any missing connections to make it all-to-all
+    nodes.forEach((sourceNode) => {
+      nodes.forEach((targetNode) => {
+        if (sourceNode.id !== targetNode.id) {
+          // Check if this connection already exists
+          const connectionExists = allLinks.some(
+            (link) =>
+              (getNodeId(link.source) === sourceNode.id &&
+                getNodeId(link.target) === targetNode.id) ||
+              (getNodeId(link.source) === targetNode.id &&
+                getNodeId(link.target) === sourceNode.id)
+          );
+
+          if (!connectionExists) {
+            allLinks.push({
+              source: sourceNode.id,
+              target: targetNode.id,
+              value: 0.2, // Lower value for unused connections
+            });
+          }
+        }
+      });
+    });
+
+    setGraphData({ nodes, links: allLinks });
   }, [network, hasMounted]);
 
-  // Agent type styling
-  const agentStyles: Record<AgentType, { color: string; icon: JSX.Element }> = {
-    main: { color: "#FF6B6B", icon: <Cpu size={20} /> },
-    text: { color: "#4ECDC4", icon: <MessageSquare size={20} /> },
-    image: { color: "#1A535C", icon: <Layers size={20} /> },
-    data: { color: "#FFE66D", icon: <BarChart2 size={20} /> },
-    assistant: { color: "#6B48FF", icon: <Bot size={20} /> },
+  // Agent styling by type
+  const agentStyles = {
+    main: { color: "#FF6B6B", glowColor: "#FF0045" },
+    text: { color: "#4ECDC4", glowColor: "#00FFD1" },
+    image: { color: "#1A535C", glowColor: "#00CCFF" },
+    data: { color: "#FFE66D", glowColor: "#FFCC00" },
+    assistant: { color: "#6B48FF", glowColor: "#7C4DFF" },
   };
 
-  // Update dimensions on resize - only after component has mounted
+  // Update dimensions on resize
   useEffect(() => {
     if (!hasMounted) return;
 
@@ -112,12 +126,6 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, [hasMounted]);
 
-  // Graph event handlers
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-  const handleNodeClick = (node: any, _event: MouseEvent) => {
-    onNodeClick(node as GraphNode);
-  };
-
   // Extract node id safely
   const getNodeId = (
     node: string | GraphNode | number | { id?: string | number } | undefined
@@ -128,12 +136,152 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
     return (node.id || "").toString();
   };
 
+  // Custom node rendering function
+  const nodeCanvasObject = (
+    node: GraphNode,
+    ctx: CanvasRenderingContext2D,
+    globalScale: number
+  ) => {
+    // Safety checks for node positions
+    if (
+      node.x === undefined ||
+      node.y === undefined ||
+      !isFinite(node.x) ||
+      !isFinite(node.y)
+    ) {
+      return;
+    }
+
+    const label = node.name || "Unknown";
+    const fontSize = 14 / globalScale;
+    const nodeType = node.type;
+
+    // Node dimensions
+    const nodeWidth = Math.max(label.length * 8, 140) / globalScale;
+    const nodeHeight = 44 / globalScale;
+    const cornerRadius = 6 / globalScale;
+
+    // Get colors
+    const isSelected = selectedAgents.includes(node.id);
+    const isProcessing = node.status === "processing";
+    const baseColor = agentStyles[nodeType]?.color || "#999999";
+    const glowColor = agentStyles[nodeType]?.glowColor || "#666666";
+
+    // Get positions
+    const nodeX = node.x;
+    const nodeY = node.y;
+
+    ctx.save();
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Draw glow effect for selected or processing nodes
+    if (isSelected || (processingTransaction && isProcessing)) {
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 15;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
+
+    // Draw rounded rectangle node
+    ctx.beginPath();
+    ctx.moveTo(nodeX - nodeWidth / 2 + cornerRadius, nodeY - nodeHeight / 2);
+    ctx.lineTo(nodeX + nodeWidth / 2 - cornerRadius, nodeY - nodeHeight / 2);
+    ctx.arcTo(
+      nodeX + nodeWidth / 2,
+      nodeY - nodeHeight / 2,
+      nodeX + nodeWidth / 2,
+      nodeY - nodeHeight / 2 + cornerRadius,
+      cornerRadius
+    );
+    ctx.lineTo(nodeX + nodeWidth / 2, nodeY + nodeHeight / 2 - cornerRadius);
+    ctx.arcTo(
+      nodeX + nodeWidth / 2,
+      nodeY + nodeHeight / 2,
+      nodeX + nodeWidth / 2 - cornerRadius,
+      nodeY + nodeHeight / 2,
+      cornerRadius
+    );
+    ctx.lineTo(nodeX - nodeWidth / 2 + cornerRadius, nodeY + nodeHeight / 2);
+    ctx.arcTo(
+      nodeX - nodeWidth / 2,
+      nodeY + nodeHeight / 2,
+      nodeX - nodeWidth / 2,
+      nodeY + nodeHeight / 2 - cornerRadius,
+      cornerRadius
+    );
+    ctx.lineTo(nodeX - nodeWidth / 2, nodeY - nodeHeight / 2 + cornerRadius);
+    ctx.arcTo(
+      nodeX - nodeWidth / 2,
+      nodeY - nodeHeight / 2,
+      nodeX - nodeWidth / 2 + cornerRadius,
+      nodeY - nodeHeight / 2,
+      cornerRadius
+    );
+    ctx.closePath();
+
+    // Fill with gradient
+    const gradient = ctx.createLinearGradient(
+      nodeX - nodeWidth / 2,
+      nodeY - nodeHeight / 2,
+      nodeX + nodeWidth / 2,
+      nodeY + nodeHeight / 2
+    );
+    gradient.addColorStop(0, baseColor);
+    gradient.addColorStop(1, adjustColor(baseColor, -20));
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Add a border with neon glow effect
+    ctx.strokeStyle = isSelected ? glowColor : adjustColor(baseColor, 30);
+    ctx.lineWidth = isSelected ? 2 / globalScale : 1.5 / globalScale;
+    ctx.stroke();
+
+    // Draw node name
+    ctx.fillStyle = "#FFFFFF";
+    ctx.shadowBlur = 0; // Turn off shadow for text
+    ctx.fillText(label, nodeX, nodeY - fontSize * 0.2);
+
+    // Draw balance beneath the node name
+    ctx.font = `${fontSize * 0.8}px Arial`;
+    ctx.fillStyle = "#FFFFFF99";
+    ctx.fillText(
+      formatCurrency(node.balance || 0),
+      nodeX,
+      nodeY + fontSize * 0.9
+    );
+
+    ctx.restore();
+  };
+
+  // Helper to adjust color brightness
+  const adjustColor = (color: string, amount: number): string => {
+    const clamp = (val: number) => Math.min(255, Math.max(0, val));
+
+    // Convert hex to RGB
+    const hex = color.replace("#", "");
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    // Adjust each component
+    const newR = clamp(r + amount);
+    const newG = clamp(g + amount);
+    const newB = clamp(b + amount);
+
+    // Convert back to hex
+    return `#${newR.toString(16).padStart(2, "0")}${newG
+      .toString(16)
+      .padStart(2, "0")}${newB.toString(16).padStart(2, "0")}`;
+  };
+
   // Show a loading placeholder if not mounted yet
   if (!hasMounted) {
     return (
       <div
         id="graph-container"
-        className="w-full h-full flex items-center justify-center bg-gray-800"
+        className="w-full h-full flex items-center justify-center bg-gray-900"
       >
         <div className="text-center">
           <div className="w-12 h-12 border-t-4 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
@@ -144,67 +292,192 @@ const AgentNetwork: React.FC<AgentNetworkProps> = ({
   }
 
   return (
-    <div id="graph-container" className="w-full h-full relative">
+    <div id="graph-container" className="w-full h-full relative bg-gray-900">
       {hasMounted && (
         <ForceGraph2D
           ref={graphRef}
           graphData={graphData}
           width={dimensions.width}
           height={dimensions.height}
-          nodeLabel={(node) => {
-            const graphNode = node as unknown as GraphNode;
-            return `${graphNode.name || "Unknown"} (${formatCurrency(
-              graphNode.balance || 0
-            )})`;
-          }}
-          nodeColor={(node) => {
-            // Highlight selected agents
-            const graphNode = node as unknown as GraphNode;
-            if (selectedAgents.includes(graphNode.id)) {
-              return "#ffffff"; // Bright white for selected
+          nodeCanvasObject={nodeCanvasObject}
+          nodePointerAreaPaint={(node, color, ctx) => {
+            const graphNode = node as GraphNode;
+            if (
+              graphNode.x === undefined ||
+              graphNode.y === undefined ||
+              !isFinite(graphNode.x) ||
+              !isFinite(graphNode.y)
+            ) {
+              return;
             }
-            return agentStyles[graphNode.type]?.color || "#999";
+
+            const label = graphNode.name || "Unknown";
+            const nodeWidth =
+              Math.max(label.length * 8, 140) / ctx.getTransform().a;
+            const nodeHeight = 44 / ctx.getTransform().a;
+            const cornerRadius = 6 / ctx.getTransform().a;
+
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(
+              graphNode.x - nodeWidth / 2 + cornerRadius,
+              graphNode.y - nodeHeight / 2
+            );
+            ctx.lineTo(
+              graphNode.x + nodeWidth / 2 - cornerRadius,
+              graphNode.y - nodeHeight / 2
+            );
+            ctx.arcTo(
+              graphNode.x + nodeWidth / 2,
+              graphNode.y - nodeHeight / 2,
+              graphNode.x + nodeWidth / 2,
+              graphNode.y - nodeHeight / 2 + cornerRadius,
+              cornerRadius
+            );
+            ctx.lineTo(
+              graphNode.x + nodeWidth / 2,
+              graphNode.y + nodeHeight / 2 - cornerRadius
+            );
+            ctx.arcTo(
+              graphNode.x + nodeWidth / 2,
+              graphNode.y + nodeHeight / 2,
+              graphNode.x + nodeWidth / 2 - cornerRadius,
+              graphNode.y + nodeHeight / 2,
+              cornerRadius
+            );
+            ctx.lineTo(
+              graphNode.x - nodeWidth / 2 + cornerRadius,
+              graphNode.y + nodeHeight / 2
+            );
+            ctx.arcTo(
+              graphNode.x - nodeWidth / 2,
+              graphNode.y + nodeHeight / 2,
+              graphNode.x - nodeWidth / 2,
+              graphNode.y + nodeHeight / 2 - cornerRadius,
+              cornerRadius
+            );
+            ctx.lineTo(
+              graphNode.x - nodeWidth / 2,
+              graphNode.y - nodeHeight / 2 + cornerRadius
+            );
+            ctx.arcTo(
+              graphNode.x - nodeWidth / 2,
+              graphNode.y - nodeHeight / 2,
+              graphNode.x - nodeWidth / 2 + cornerRadius,
+              graphNode.y - nodeHeight / 2,
+              cornerRadius
+            );
+            ctx.closePath();
+            ctx.fill();
           }}
-          nodeRelSize={8}
-          linkWidth={(link) => 1 + (link.value as number) / 2}
-          linkColor={() => "rgba(255, 255, 255, 0.2)"}
-          onNodeClick={handleNodeClick}
-          cooldownTicks={100}
-          linkDirectionalParticles={(link) => {
+          nodeRelSize={10}
+          linkWidth={(link) => {
+            const value = link.value as number;
             const source = getNodeId(link.source);
             const target = getNodeId(link.target);
 
+            // Highlight links involved in active transactions
+            if (
+              processingTransaction &&
+              ((source === "main-agent" && selectedAgents.includes(target)) ||
+                (target === "main-agent" && selectedAgents.includes(source)))
+            ) {
+              return 2;
+            }
+
+            // Base width on value
+            return Math.max(0.5, value);
+          }}
+          linkColor={(link) => {
+            const source = getNodeId(link.source);
+            const target = getNodeId(link.target);
+
+            // Get target node color for the link
+            const targetNode = graphData.nodes.find((n) => n.id === target);
+
+            if (
+              processingTransaction &&
+              ((source === "main-agent" && selectedAgents.includes(target)) ||
+                (target === "main-agent" && selectedAgents.includes(source)))
+            ) {
+              // Bright link for active transactions
+              return targetNode
+                ? agentStyles[targetNode.type]?.glowColor || "#FFFFFF"
+                : "#FFFFFF";
+            }
+
+            // Semi-transparent link for regular connections
+            return "rgba(80, 80, 255, 0.2)";
+          }}
+          onNodeClick={onNodeClick}
+          cooldownTicks={100}
+          d3AlphaDecay={0.02}
+          d3VelocityDecay={0.1}
+          linkDirectionalParticles={(link) => {
+            const source = getNodeId(link.source);
+            const target = getNodeId(link.target);
+            const value = link.value as number;
+
             // Show particles for active transactions
             if (
-              selectedAgents.length > 0 &&
+              processingTransaction &&
               source === "main-agent" &&
-              selectedAgents.includes(target) &&
-              processingTransaction
+              selectedAgents.includes(target)
             ) {
               return 6; // More particles for active transactions
             }
 
-            return (link.value as number) > 0
-              ? Math.min(link.value as number, 3)
-              : 0;
+            // Show fewer particles for regular connections based on value
+            return value > 0.5 ? Math.min(Math.ceil(value), 3) : 0;
           }}
-          linkDirectionalParticleSpeed={0.01}
-          linkDirectionalParticleWidth={2}
+          linkDirectionalParticleSpeed={(link) => {
+            const source = getNodeId(link.source);
+            const target = getNodeId(link.target);
+
+            if (
+              processingTransaction &&
+              source === "main-agent" &&
+              selectedAgents.includes(target)
+            ) {
+              return 0.02; // Faster particles for active transactions
+            }
+
+            return 0.01; // Regular speed
+          }}
+          linkDirectionalParticleWidth={(link) => {
+            const source = getNodeId(link.source);
+            const target = getNodeId(link.target);
+
+            if (
+              processingTransaction &&
+              source === "main-agent" &&
+              selectedAgents.includes(target)
+            ) {
+              return 4; // Larger particles for active transactions
+            }
+
+            return 2; // Regular size
+          }}
           linkDirectionalParticleColor={(link) => {
             const source = getNodeId(link.source);
             const target = getNodeId(link.target);
 
             if (
-              selectedAgents.length > 0 &&
+              processingTransaction &&
               source === "main-agent" &&
-              selectedAgents.includes(target) &&
-              processingTransaction
+              selectedAgents.includes(target)
             ) {
-              return "#FFE066"; // Bright yellow for active transactions
+              // Get target node color for transaction particles
+              const targetNode = graphData.nodes.find((n) => n.id === target);
+              if (targetNode) {
+                return agentStyles[targetNode.type]?.glowColor || "#FFE066";
+              }
+              return "#FFE066"; // Default to yellow if node not found
             }
 
-            return "#FFFFFF33";
+            return "#FFFFFF33"; // Semi-transparent white for regular particles
           }}
+          backgroundColor="#0F172A" // Dark blue background
         />
       )}
     </div>

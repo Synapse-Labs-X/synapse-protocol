@@ -1,4 +1,4 @@
-import React, { JSX, useState } from "react";
+import React, { JSX, useState, useEffect } from "react";
 import {
   Send,
   Activity,
@@ -7,6 +7,8 @@ import {
   Layers,
   BarChart2,
   Bot,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { Agent } from "@/types/agent";
 import { formatCurrency } from "@/lib/utils/formatters";
@@ -24,11 +26,16 @@ const PromptInput: React.FC<PromptInputProps> = ({
 }) => {
   const [prompt, setPrompt] = useState<string>("");
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [isHovered, setIsHovered] = useState<boolean>(false);
+  const [animateSubmit, setAnimateSubmit] = useState<boolean>(false);
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isProcessing) return;
+
+    setAnimateSubmit(true);
     await onSubmit(prompt);
     setPrompt("");
+    setTimeout(() => setAnimateSubmit(false), 1000);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -42,14 +49,26 @@ const PromptInput: React.FC<PromptInputProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col">
-        <label
-          htmlFor="prompt"
-          className="text-sm font-medium text-gray-300 mb-2"
+      <div className="relative flex flex-col">
+        {/* Animated top glow */}
+        <div
+          className={`absolute -top-4 left-0 right-0 h-6 bg-gradient-to-b from-blue-500/30 to-transparent transition-opacity duration-700 ${
+            isExpanded || prompt.length > 0 ? "opacity-100" : "opacity-0"
+          }`}
+        ></div>
+
+        <h3 className="text-lg font-bold mb-2 flex items-center gap-2 text-white">
+          <Sparkles size={16} className="text-blue-400" />
+          Agent Interaction
+        </h3>
+
+        <div
+          className={`relative rounded-xl transition-all duration-300 ${
+            isHovered ? "shadow-[0_0_15px_rgba(59,130,246,0.3)]" : ""
+          }`}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
         >
-          Task Prompt
-        </label>
-        <div className="relative">
           <textarea
             id="prompt"
             value={prompt}
@@ -58,10 +77,11 @@ const PromptInput: React.FC<PromptInputProps> = ({
             onFocus={() => setIsExpanded(true)}
             onBlur={() => setIsExpanded(false)}
             placeholder="Enter a task for the agent network..."
-            className={`bg-gray-800 border border-gray-700 rounded-lg p-3 text-white resize-none w-full transition-all duration-300 ${
-              isExpanded ? "h-32" : "h-20"
+            className={`bg-gray-800/90 backdrop-blur-md border border-gray-700 rounded-xl p-4 text-white resize-none w-full transition-all duration-300 focus:border-blue-400 focus:shadow-[0_0_10px_rgba(59,130,246,0.5)] ${
+              isExpanded ? "h-40" : "h-24"
             }`}
           />
+
           <div className="absolute bottom-3 right-3 flex items-center space-x-2">
             {prompt.length > 0 && (
               <span className="text-xs text-gray-400">
@@ -72,10 +92,11 @@ const PromptInput: React.FC<PromptInputProps> = ({
         </div>
       </div>
 
-      {/* Agent Suggestions */}
+      {/* Agent Suggestions - Only show when relevant */}
       {prompt.length > 0 && !isProcessing && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <div className="text-xs font-medium text-gray-400 mb-2">
+        <div className="bg-gray-800/40 backdrop-blur-md border border-gray-700/50 rounded-xl p-4 shadow-lg transform transition-all duration-300 hover:scale-[1.01]">
+          <div className="text-xs font-medium text-blue-400 mb-2 flex items-center">
+            <Zap size={12} className="mr-1" />
             Suggested Agents
           </div>
           <div className="text-xs text-gray-300">
@@ -88,10 +109,12 @@ const PromptInput: React.FC<PromptInputProps> = ({
       <button
         onClick={handleSubmit}
         disabled={isProcessing || !prompt.trim()}
-        className={`w-full py-3 rounded-lg flex items-center justify-center font-medium transition ${
+        className={`w-full py-3 rounded-xl flex items-center justify-center font-medium transition-all duration-300 ${
           isProcessing || !prompt.trim()
             ? "bg-gray-700 text-gray-500 cursor-not-allowed"
-            : "bg-blue-600 hover:bg-blue-700 text-white"
+            : `bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white ${
+                animateSubmit ? "animate-pulse" : ""
+              }`
         }`}
       >
         {isProcessing ? (
@@ -101,33 +124,42 @@ const PromptInput: React.FC<PromptInputProps> = ({
           </>
         ) : (
           <>
-            <Send size={18} className="mr-2" />
+            <Send
+              size={18}
+              className={`mr-2 ${animateSubmit ? "animate-ping" : ""}`}
+            />
             Submit Task
           </>
         )}
       </button>
 
-      {/* Selected Agents Display */}
+      {/* Selected Agents Display - with floating-card design */}
       {selectedAgents.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-4 bg-gray-800/60 backdrop-blur-lg border border-gray-700/50 rounded-xl p-4 shadow-lg transition-all duration-500 animate-fadeIn">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium text-gray-300">
+            <h3 className="text-sm font-medium text-blue-300 flex items-center">
+              <Activity size={14} className="mr-1" />
               Selected Agents
             </h3>
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-gray-400 bg-gray-700/60 px-2 py-1 rounded-md">
               Total Cost: {formatCurrency(totalCost)}
             </span>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {selectedAgents.map((agent) => (
               <div
                 key={agent.id}
-                className="bg-gray-800 px-3 py-1 rounded-full text-sm flex items-center"
-                style={{ borderColor: getAgentColorByType(agent.type) }}
+                className="bg-gray-700/60 backdrop-blur-sm px-3 py-1 rounded-lg text-sm flex items-center transition-all duration-300 hover:bg-gray-600/60 animate-fadeIn"
+                style={{
+                  borderLeft: `3px solid ${getAgentColorByType(agent.type)}`,
+                  boxShadow: `0 0 8px rgba(${hexToRgb(
+                    getAgentColorByType(agent.type)
+                  )}, 0.3)`,
+                }}
               >
                 {getAgentIconByType(agent.type)}
                 <span className="ml-1">{agent.name}</span>
-                <span className="ml-2 text-xs text-gray-400">
+                <span className="ml-2 text-xs bg-gray-800/80 px-1.5 py-0.5 rounded text-gray-300">
                   {formatCurrency(agent.cost)}
                 </span>
               </div>
@@ -135,18 +167,35 @@ const PromptInput: React.FC<PromptInputProps> = ({
           </div>
         </div>
       )}
+
+      {/* Add custom floating style animation */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.5s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 };
 
-// Helper functions for agent styling
+// Helper functions for agent styling with enhanced colors
 function getAgentColorByType(type: string): string {
   const colors: Record<string, string> = {
     main: "#FF6B6B",
     text: "#4ECDC4",
-    image: "#1A535C",
-    data: "#FFE66D",
-    assistant: "#6B48FF",
+    image: "#00BFFF",
+    data: "#FFF35C",
+    assistant: "#9D5CFF",
   };
   return colors[type] || "#999";
 }
@@ -166,6 +215,19 @@ function getAgentIconByType(type: string): JSX.Element {
     default:
       return <></>;
   }
+}
+
+// Helper function to convert hex to rgb
+function hexToRgb(hex: string): string {
+  // Remove # if present
+  hex = hex.replace("#", "");
+
+  // Parse the hex values
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+
+  return `${r}, ${g}, ${b}`;
 }
 
 export default PromptInput;
