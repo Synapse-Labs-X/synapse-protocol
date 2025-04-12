@@ -7,7 +7,7 @@ import { analyzePrompt } from "@/lib/agents/analysis";
 import { executeTransactions } from "@/lib/agents/orchestrator";
 import DashboardLayoutWithTransactions from "@/components/dashboard/DashboardLayoutWithTransactions";
 import ClientSideOnly from "@/components/ClientSideOnly";
-import WalletInitialization from "@/components/dashboard/WalletInitialization";
+import WalletInitialization from "@/components/wallet/WalletInitialization";
 import walletInitService from "@/lib/xrp/walletInitService";
 import transactionService from "@/lib/xrp/transactionService";
 import userTransactionService from "@/lib/transaction/userTransactionService";

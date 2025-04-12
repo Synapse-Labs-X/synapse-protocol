@@ -4,10 +4,10 @@ import React, { useState, useEffect } from "react";
 import { Zap, Activity, ExternalLink, Menu, X, Shield } from "lucide-react";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
-import AgentNetwork from "@/components/dashboard/AgentNetwork";
-import TransactionHistory from "@/components/dashboard/TransactionHistory";
-import AgentDetails from "@/components/dashboard/AgentDetails";
-import PromptInput from "@/components/dashboard/PromptInput";
+import AgentNetwork from "@/components/network/AgentNetwork";
+import TransactionHistory from "@/components/transactions/TransactionHistory";
+import AgentDetails from "@/components/agent/AgentDetails";
+import PromptInput from "@/components/agent/PromptInput";
 import StatusBarWithTransactions from "./StatusBarWithTransactions";
 
 interface DashboardLayoutWithTransactionsProps {

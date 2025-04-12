@@ -9,7 +9,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { Agent } from "@/types/agent";
-import TransactionButton from "./TransactionButton";
+import TransactionButton from "@/components/transactions/TransactionButton";
 import transactionService from "@/lib/xrp/transactionService";
 
 interface StatusBarMenuProps {
