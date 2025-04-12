@@ -1,8 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
-import { Database, FileText, Server } from "lucide-react";
+import {
+  Database,
+  FileText,
+  Server,
+  X,
+  Wallet,
+  Check,
+  AlertCircle,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils/formatters";
 import StatusBarMenu from "./StatusBarMenu";
+import WalletStatusIndicator from "./WalletStatusIndicator";
 import { Agent } from "@/types/agent";
 
 interface StatusBarProps {
@@ -12,6 +21,11 @@ interface StatusBarProps {
   mainAgent?: Agent;
   agents?: Agent[];
   onTransactionComplete?: () => void;
+  walletStatus?: {
+    initialized: string[];
+    pending: string[];
+    failed: string[];
+  };
 }
 
 const StatusBar: React.FC<StatusBarProps> = ({
@@ -21,7 +35,15 @@ const StatusBar: React.FC<StatusBarProps> = ({
   mainAgent,
   agents = [],
   onTransactionComplete,
+  walletStatus,
 }) => {
+  const [showWalletModal, setShowWalletModal] = useState(false);
+
+  // Calculate wallet statistics for the indicator
+  const initializedCount = walletStatus?.initialized.length || 0;
+  const totalCount = agents.length;
+  const hasFailures = (walletStatus?.failed.length || 0) > 0;
+
   return (
     <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
       <div className="flex items-center">
@@ -39,6 +61,15 @@ const StatusBar: React.FC<StatusBarProps> = ({
       </div>
 
       <div className="flex items-center space-x-2 md:space-x-4">
+        {walletStatus && (
+          <WalletStatusIndicator
+            initializedCount={initializedCount}
+            totalCount={totalCount}
+            hasFailures={hasFailures}
+            onClick={() => setShowWalletModal(true)}
+          />
+        )}
+
         <div className="bg-gray-700 px-3 py-2 rounded-lg flex items-center">
           <Database size={16} className="text-green-400 mr-2" />
           <div>
@@ -71,6 +102,135 @@ const StatusBar: React.FC<StatusBarProps> = ({
           />
         )}
       </div>
+
+      {/* Wallet Status Modal */}
+      {showWalletModal && walletStatus && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-xl max-w-md w-full p-6 shadow-xl border border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">Wallet Status</h3>
+              <button
+                onClick={() => setShowWalletModal(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-400">Initialization Progress</span>
+                <span className="text-blue-400">
+                  {Math.round((initializedCount / totalCount) * 100)}%
+                </span>
+              </div>
+              <div className="h-2 w-full bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full"
+                  style={{ width: `${(initializedCount / totalCount) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Initialized wallets */}
+              {walletStatus.initialized.length > 0 && (
+                <div>
+                  <h4 className="text-green-400 flex items-center text-sm font-medium mb-2">
+                    <Check size={16} className="mr-1" /> Initialized Wallets
+                  </h4>
+                  <div className="bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto">
+                    <div className="space-y-1">
+                      {walletStatus.initialized.map((id) => {
+                        const agent = agents.find((a) => a.id === id);
+                        return (
+                          <div
+                            key={id}
+                            className="text-sm flex justify-between"
+                          >
+                            <span>{agent?.name || id}</span>
+                            <span className="text-green-400 text-xs">
+                              Ready
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pending wallets */}
+              {walletStatus.pending.length > 0 && (
+                <div>
+                  <h4 className="text-blue-400 flex items-center text-sm font-medium mb-2">
+                    <Wallet size={16} className="mr-1" /> Pending Wallets
+                  </h4>
+                  <div className="bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto">
+                    <div className="space-y-1">
+                      {walletStatus.pending.map((id) => {
+                        const agent = agents.find((a) => a.id === id);
+                        return (
+                          <div
+                            key={id}
+                            className="text-sm flex justify-between"
+                          >
+                            <span>{agent?.name || id}</span>
+                            <span className="text-blue-400 text-xs">
+                              Initializing...
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Failed wallets */}
+              {walletStatus.failed.length > 0 && (
+                <div>
+                  <h4 className="text-red-400 flex items-center text-sm font-medium mb-2">
+                    <AlertCircle size={16} className="mr-1" /> Failed Wallets
+                  </h4>
+                  <div className="bg-gray-700 rounded-lg p-3 max-h-40 overflow-y-auto">
+                    <div className="space-y-1">
+                      {walletStatus.failed.map((id) => {
+                        const agent = agents.find((a) => a.id === id);
+                        return (
+                          <div
+                            key={id}
+                            className="text-sm flex justify-between"
+                          >
+                            <span>{agent?.name || id}</span>
+                            <span className="text-red-400 text-xs">Failed</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-sm text-gray-400">
+                    <p>
+                      Some wallets failed to initialize. These agents may have
+                      limited functionality.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowWalletModal(false)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

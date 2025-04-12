@@ -20,7 +20,7 @@ import AgentNetwork from "@/components/dashboard/AgentNetwork";
 import TransactionHistory from "@/components/dashboard/TransactionHistory";
 import AgentDetails from "@/components/dashboard/AgentDetails";
 import PromptInput from "@/components/dashboard/PromptInput";
-import StatusBarMenu from "@/components/dashboard/StatusBarMenu";
+import StatusBar from "@/components/dashboard/StatusBar";
 
 interface EnhancedDashboardProps {
   network: AgentNetworkType;
@@ -33,6 +33,11 @@ interface EnhancedDashboardProps {
   onCloseDetails: () => void;
   onPromptSubmit: (prompt: string) => Promise<void>;
   onTransactionComplete: () => void;
+  walletStatus?: {
+    initialized: string[];
+    pending: string[];
+    failed: string[];
+  };
 }
 
 // Dashboard component with enhanced UI
@@ -47,6 +52,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
   onCloseDetails,
   onPromptSubmit,
   onTransactionComplete,
+  walletStatus,
 }) => {
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [showGlowEffects, setShowGlowEffects] = useState<boolean>(false);
@@ -78,91 +84,17 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           ></div>
         </div>
 
-        <div className="flex items-center justify-between p-4">
-          {/* Logo and Title */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-white from-blue-600 to-indigo-800 shadow-lg">
-              <Image
-                width={20}
-                height={20}
-                alt="Synapse Logo"
-                src={"/synapse-logo.png"}
-              />
-              {showGlowEffects && (
-                <div className="absolute inset-0 rounded-xl bg-blue-500/20 animate-pulse"></div>
-              )}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
-                Synapse
-              </h1>
-              <p className="text-xs text-gray-400">
-                Decentralized Agent Payment Protocol
-              </p>
-            </div>
+        <StatusBar
+          balance={balance}
+          network="XRP Testnet"
+          transactionCount={transactions.length}
+          mainAgent={mainAgent}
+          agents={network.nodes}
+          onTransactionComplete={onTransactionComplete}
+          walletStatus={walletStatus}
+        />
 
-            {/* Mobile menu toggle */}
-            <button
-              className="block md:hidden ml-4 p-1 rounded-lg bg-gray-800 hover:bg-gray-700"
-              onClick={() => setMobileSidebarOpen(!isMobileSidebarOpen)}
-            >
-              {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-          </div>
-
-          {/* Status Info Pills */}
-          <div className="hidden md:flex items-center gap-3">
-            <div className="group relative px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800 hover:border-gray-600/50">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-b from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex items-center gap-2">
-                <Database size={16} className="text-blue-400" />
-                <div>
-                  <span className="text-gray-400 text-xs">Balance</span>
-                  <div className="font-mono text-sm">
-                    {formatCurrency(balance)}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="group relative px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800 hover:border-gray-600/50">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-b from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex items-center gap-2">
-                <Server size={16} className="text-green-400" />
-                <div>
-                  <span className="text-gray-400 text-xs">Network</span>
-                  <div className="text-sm text-green-400 flex items-center gap-1">
-                    XRP Testnet
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="group relative px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800 hover:border-gray-600/50">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-b from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex items-center gap-2">
-                <FileText size={16} className="text-purple-400" />
-                <div>
-                  <span className="text-gray-400 text-xs">Transactions</span>
-                  <div className="text-sm">{transactions.length}</div>
-                </div>
-              </div>
-            </div>
-
-            {mainAgent && (
-              <StatusBarMenu
-                mainAgent={mainAgent}
-                targetAgents={network.nodes.filter(
-                  (a) => a.id !== mainAgent.id
-                )}
-                onTransactionComplete={onTransactionComplete}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Mobile Status Bar - Shown only on mobile */}
+        {/* Mobile menu toggle */}
         <div
           className={`md:hidden transition-all duration-300 overflow-hidden ${
             isMobileSidebarOpen ? "max-h-96" : "max-h-0"
@@ -194,12 +126,14 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
             </div>
 
             {mainAgent && (
-              <StatusBarMenu
+              <StatusBar
+                balance={balance}
+                network="XRP Testnet"
+                transactionCount={transactions.length}
                 mainAgent={mainAgent}
-                targetAgents={network.nodes.filter(
-                  (a) => a.id !== mainAgent.id
-                )}
+                agents={network.nodes}
                 onTransactionComplete={onTransactionComplete}
+                walletStatus={walletStatus}
               />
             )}
           </div>

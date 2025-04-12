@@ -7,6 +7,9 @@ import { analyzePrompt } from "@/lib/agents/analysis";
 import { executeTransactions } from "@/lib/agents/orchestrator";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import ClientSideOnly from "@/components/ClientSideOnly";
+import WalletInitialization from "@/components/dashboard/WalletInitialization";
+import walletInitService from "@/lib/xrp/walletInitService";
+import transactionService from "@/lib/xrp/transactionService";
 import Image from "next/image";
 
 export default function DashboardPage() {
@@ -22,6 +25,21 @@ export default function DashboardPage() {
   const [balance, setBalance] = useState<number>(995); // Starting balance
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasMounted, setHasMounted] = useState<boolean>(false);
+
+  // Wallet initialization states
+  const [initializing, setInitializing] = useState<boolean>(false);
+  const [initProgress, setInitProgress] = useState<{
+    initialized: string[];
+    pending: string[];
+    failed: string[];
+    progress: number;
+  }>({
+    initialized: [],
+    pending: [],
+    failed: [],
+    progress: 0,
+  });
+  const [agentNames, setAgentNames] = useState<Record<string, string>>({});
 
   // Set mounted state
   useEffect(() => {
@@ -130,11 +148,69 @@ export default function DashboardPage() {
 
       setNetwork({ nodes: initialNodes, links: initialLinks });
       setTransactions([initialTransaction]);
-      setIsLoading(false);
+
+      // Create a mapping of agent IDs to names for the initialization UI
+      const nameMap = initialNodes.reduce((map, agent) => {
+        map[agent.id] = agent.name;
+        return map;
+      }, {} as Record<string, string>);
+      setAgentNames(nameMap);
+
+      // Start pre-initializing wallets
+      initializeWallets(initialNodes);
     }, 1500);
 
     return () => clearTimeout(loadTimer);
   }, [hasMounted]);
+
+  // Initialize all agent wallets on page load
+  const initializeWallets = async (agents: Agent[]) => {
+    setInitializing(true);
+    setInitProgress({
+      initialized: [],
+      pending: agents.map((agent) => agent.id),
+      failed: [],
+      progress: 0,
+    });
+
+    try {
+      // Initialize wallets in batches
+      const intervalId = setInterval(async () => {
+        const progress = walletInitService.getInitializationProgress();
+        setInitProgress(progress);
+
+        // When all wallets are initialized or we've handled all failures, finish loading
+        if (progress.pending.length === 0) {
+          clearInterval(intervalId);
+
+          // Optional: Create trustlines for agents that need them
+          // This could be moved to a separate step if desired
+          await walletInitService.createTrustlinesForAgents(
+            progress.initialized.filter((id) => id !== "main-agent")
+          );
+
+          // Complete initialization
+          // Mark the initialized wallets in the transaction service
+          transactionService.markWalletsAsInitialized(progress.initialized);
+
+          setTimeout(() => {
+            setInitializing(false);
+            setIsLoading(false);
+          }, 1000);
+        }
+      }, 500);
+
+      // Start the actual wallet initialization
+      walletInitService.initializeAllWallets(agents);
+    } catch (error) {
+      console.error("Failed to initialize wallets:", error);
+      // Even on error, proceed to the dashboard but with limited functionality
+      setTimeout(() => {
+        setInitializing(false);
+        setIsLoading(false);
+      }, 1000);
+    }
+  };
 
   // Handle prompt submission
   const handleSubmit = async (promptText: string) => {
@@ -398,6 +474,15 @@ export default function DashboardPage() {
 
   return (
     <ClientSideOnly>
+      {initializing && (
+        <WalletInitialization
+          initialized={initProgress.initialized}
+          pending={initProgress.pending}
+          failed={initProgress.failed}
+          progress={initProgress.progress}
+          agentNames={agentNames}
+        />
+      )}
       <DashboardLayout
         network={network}
         transactions={transactions}
