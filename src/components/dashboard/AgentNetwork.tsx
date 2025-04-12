@@ -400,7 +400,7 @@ const AgentNetwork = ({
     return (
       <div
         ref={containerRef}
-        className="w-full h-full flex items-center justify-center bg-gray-900"
+        className="w-full h-full flex items-center justify-center"
       >
         <div className="text-center">
           <div className="w-12 h-12 border-t-4 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
@@ -417,7 +417,7 @@ const AgentNetwork = ({
   };
 
   return (
-    <div ref={containerRef} className="w-full h-full relative bg-gray-900">
+    <div ref={containerRef} className="w-full h-full relative">
       {hasMounted && graphData.nodes.length > 0 && (
         <ForceGraph2D
           ref={graphRef as React.MutableRefObject<ForceGraphMethods>}
@@ -605,7 +605,7 @@ const AgentNetwork = ({
 
             return "#FFFFFF33"; // Semi-transparent white for regular particles
           }}
-          backgroundColor="#0F172A" // Dark blue background
+          backgroundColor="rgba(15, 23, 42, 0)" // Dark blue background
           onEngineStop={() => {
             // When the simulation stops, ensure we're centered properly
             if (graphRef.current) {

@@ -3,7 +3,7 @@ import { Zap } from "lucide-react";
 
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-gradient-futuristic flex flex-col items-center justify-center">
       <div className="text-center">
         <div className="flex items-center justify-center mb-6">
           <Zap size={36} className="text-yellow-400 mr-3" />
