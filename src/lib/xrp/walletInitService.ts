@@ -23,6 +23,11 @@ class WalletInitService {
 
   constructor() {
     this.client = XrpClient.getInstance();
+
+    // Pre-initialize XRP client connection at service creation time
+    this.client.initialize().catch((err) => {
+      console.error("Failed to pre-initialize XRP client connection:", err);
+    });
   }
 
   /**
@@ -49,49 +54,54 @@ class WalletInitService {
       // First connect to the XRP Ledger
       await this.client.initialize();
 
-      // Process agents in batches to avoid overwhelming the network
-      const batchSize = 3;
-      const batches = this.chunkArray(agents, batchSize);
+      // Process all agents truly in parallel - no batching
+      const initPromises = agents.map(async (agent) => {
+        try {
+          // Get or create wallet for agent
+          const wallet = await this.client.getWallet(agent.id);
 
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
+          // Track successful initialization
+          return {
+            success: true,
+            agentId: agent.id,
+            wallet,
+          };
+        } catch (error) {
+          console.error(`Failed to initialize wallet for ${agent.id}:`, error);
 
-        // Process each batch in parallel
-        await Promise.all(
-          batch.map(async (agent) => {
-            try {
-              // Get or create wallet for agent
-              const wallet = await this.client.getWallet(agent.id);
+          // Track failed initialization
+          return {
+            success: false,
+            agentId: agent.id,
+            error,
+          };
+        }
+      });
 
-              // Move from pending to initialized
-              this.initProgress.pending = this.initProgress.pending.filter(
-                (id) => id !== agent.id
-              );
-              this.initProgress.initialized.push(agent.id);
+      // Execute all wallet initializations concurrently
+      const results = await Promise.all(initPromises);
 
-              console.log(
-                `Initialized wallet for ${agent.id}: ${wallet.address}`
-              );
-            } catch (error) {
-              console.error(
-                `Failed to initialize wallet for ${agent.id}:`,
-                error
-              );
-
-              // Move from pending to failed
-              this.initProgress.pending = this.initProgress.pending.filter(
-                (id) => id !== agent.id
-              );
-              this.initProgress.failed.push(agent.id);
-            }
-          })
+      // Process results
+      for (const result of results) {
+        // Remove from pending
+        this.initProgress.pending = this.initProgress.pending.filter(
+          (id) => id !== result.agentId
         );
 
-        // Update progress after each batch
-        this.initProgress.progress = Math.round(
-          (this.initProgress.initialized.length / agents.length) * 100
-        );
+        if (result.success) {
+          this.initProgress.initialized.push(result.agentId);
+          console.log(
+            `Initialized wallet for ${result.agentId}: ${result.wallet?.address}`
+          );
+        } else {
+          this.initProgress.failed.push(result.agentId);
+        }
       }
+
+      // Update final progress
+      this.initProgress.progress = Math.round(
+        (this.initProgress.initialized.length / agents.length) * 100
+      );
 
       return this.initProgress;
     } catch (error) {
@@ -117,7 +127,7 @@ class WalletInitService {
   }
 
   /**
-   * Create a trustline for a batch of agents
+   * Create a trustline for all agents in parallel
    * @param agentIds List of agent IDs to create trustlines for
    * @param limit Trust limit amount
    */
@@ -127,34 +137,29 @@ class WalletInitService {
   ): Promise<Record<string, boolean>> {
     const results: Record<string, boolean> = {};
 
-    // Process agents in batches to avoid overwhelming the network
-    const batchSize = 3;
-    const batches = this.chunkArray(agentIds, batchSize);
+    // Process all trustlines in parallel
+    const trustlinePromises = agentIds.map(async (agentId) => {
+      try {
+        // Create trustline transaction
+        const trustlineCreated = await this.createTrustline(agentId, limit);
 
-    for (const batch of batches) {
-      await Promise.all(
-        batch.map(async (agentId) => {
-          try {
-            // Get the agent's wallet
-            const wallet = await this.client.getWallet(agentId);
+        console.log(
+          `Trustline ${trustlineCreated ? "created" : "failed"} for ${agentId}`
+        );
+        return { agentId, success: trustlineCreated };
+      } catch (error) {
+        console.error(`Error creating trustline for ${agentId}:`, error);
+        return { agentId, success: false };
+      }
+    });
 
-            // Create trustline transaction using the same method from transactionService
-            // This is a simplified version - in production code you would refactor to avoid duplication
-            const trustlineCreated = await this.createTrustline(agentId, limit);
-            results[agentId] = trustlineCreated;
+    // Wait for all trustlines to be processed
+    const trustlineResults = await Promise.all(trustlinePromises);
 
-            console.log(
-              `Trustline ${
-                trustlineCreated ? "created" : "failed"
-              } for ${agentId}`
-            );
-          } catch (error) {
-            console.error(`Error creating trustline for ${agentId}:`, error);
-            results[agentId] = false;
-          }
-        })
-      );
-    }
+    // Compile results
+    trustlineResults.forEach((result) => {
+      results[result.agentId] = result.success;
+    });
 
     return results;
   }
