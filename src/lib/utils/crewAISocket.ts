@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // src/lib/utils/crewAISocket.ts
-import { socketManager } from "./socket";
+import socketService from "./crewAiWebSocketService";
 
 /**
  * Helper function to wait for a run to complete
@@ -13,11 +13,35 @@ export const waitForRunCompletion = (
   timeoutMs = 60000
 ): Promise<any> => {
   return new Promise((resolve, reject) => {
-    const socket = socketManager.getSocket();
+    // First, make sure we're connected
+    if (!socketService.isConnected()) {
+      socketService.connect().catch((error) => {
+        reject(new Error(`Failed to connect to socket service: ${error.message}`));
+      });
+    }
+
+    // Make sure we're in the correct room
+    socketService.joinRoom(runId);
+
+    // Set up a one-time handler for run completion
+    const handleRunComplete = (data: any) => {
+      // Only handle events for our specific run
+      if (data.run_id === runId) {
+        // Remove the handler to avoid memory leaks
+        socketService.updateEventHandlers({
+          onRunComplete: undefined
+        });
+        resolve(data);
+      }
+    };
 
     // Set a timeout to prevent waiting forever
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const timeout = setTimeout(() => {
-      socket.off("run_complete", handleRunComplete);
+      // Remove the handler to avoid memory leaks
+      socketService.updateEventHandlers({
+        onRunComplete: undefined
+      });
       reject(
         new Error(
           `Timed out waiting for run ${runId} to complete after ${timeoutMs}ms`
@@ -25,21 +49,10 @@ export const waitForRunCompletion = (
       );
     }, timeoutMs);
 
-    // Handler for run completion
-    const handleRunComplete = (data: any) => {
-      // Only handle events for our specific run
-      if (data.run_id === runId) {
-        clearTimeout(timeout);
-        socket.off("run_complete", handleRunComplete);
-        resolve(data);
-      }
-    };
-
-    // Listen for the run_complete event
-    socket.on("run_complete", handleRunComplete);
-
-    // Join the room for this run
-    socket.emit("join_room", { run_id: runId });
+    // Add the handler
+    socketService.updateEventHandlers({
+      onRunComplete: handleRunComplete
+    });
   });
 };
 
@@ -55,7 +68,7 @@ export const extractAgentInfo = (result: any) => {
 
   // Extract agent names from hierarchy
   const agentNames = agentHierarchy.map(
-    (agent: any) => agent.agent_name || "Unknown Agent"
+    (agent: any) => agent.agent_name.replace(/_/g, ' ') || "Unknown Agent"
   );
 
   // Extract cost information if available

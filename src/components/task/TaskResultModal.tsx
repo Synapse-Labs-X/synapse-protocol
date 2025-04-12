@@ -1,6 +1,4 @@
 // src/components/task/TaskResultModal.tsx
-"use client";
-
 import React from "react";
 import { X, CheckCircle, MessageSquare } from "lucide-react";
 
