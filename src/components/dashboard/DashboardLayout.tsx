@@ -81,7 +81,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
         <div className="flex items-center justify-between p-4">
           {/* Logo and Title */}
           <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-lg">
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-800 shadow-lg">
               <Image
                 width={20}
                 height={20}
@@ -89,7 +89,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
                 src={"/synapse-logo.png"}
               />
               {showGlowEffects && (
-                <div className="absolute inset-0 rounded-xl "></div>
+                <div className="absolute inset-0 rounded-xl bg-blue-500/20 animate-pulse"></div>
               )}
             </div>
             <div>
@@ -222,13 +222,35 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
         </div>
 
         {/* Network Graph - Enhanced container */}
-        <div className="hidden md:block w-full md:w-2/3 md:border-r md:border-gray-700/50 relative">
+        <div className="hidden md:block w-full md:w-2/3 md:border-r md:border-gray-700/50 relative bg-gradient-network overflow-hidden">
+          {/* Cyberpunk grid overlay */}
+          <div
+            className={`absolute inset-0 z-0 cyberpunk-grid ${
+              processing ? "grid-active" : ""
+            } ${selectedAgent ? "grid-focused" : ""}`}
+          >
+            <div className="absolute inset-0 cyberpunk-grid-lines"></div>
+            <div className="absolute inset-0 cyberpunk-grid-glow"></div>
+            {processing && (
+              <div className="absolute inset-0 cyberpunk-grid-pulse"></div>
+            )}
+          </div>
+
+          {/* Floating particles */}
+          <div className="absolute inset-0 z-1 pointer-events-none">
+            <div className="particle particle-1"></div>
+            <div className="particle particle-2"></div>
+            <div className="particle particle-3"></div>
+            <div className="particle particle-4"></div>
+            <div className="particle particle-5"></div>
+          </div>
+
           <div className="absolute top-2 left-2 z-10 bg-gray-800/70 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-700/50 flex items-center gap-1.5">
             <Activity size={14} className="text-blue-400" />
             <span>Agent Network Visualization</span>
           </div>
 
-          <div className="h-full relative">
+          <div className="h-full relative z-5">
             <AgentNetwork
               network={network}
               onNodeClick={onAgentSelect}
