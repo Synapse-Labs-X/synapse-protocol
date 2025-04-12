@@ -1,5 +1,13 @@
 import React from "react";
-import { Zap, Inbox, ExternalLink } from "lucide-react";
+import {
+  Zap,
+  Inbox,
+  ExternalLink,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  ArrowRight,
+} from "lucide-react";
 import { Transaction } from "@/types/transaction";
 import { Agent, AgentType } from "@/types/agent";
 import { formatCurrency } from "@/lib/utils/formatters";
@@ -13,26 +21,41 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
   transactions,
   agents,
 }) => {
-  // Get agent color by type
+  // Get agent color by type with more vibrant colors
   const getAgentColor = (type: AgentType): string => {
     const colors: Record<AgentType, string> = {
       main: "#FF6B6B",
       text: "#4ECDC4",
-      image: "#1A535C",
-      data: "#FFE66D",
-      assistant: "#6B48FF",
+      image: "#00BFFF",
+      data: "#FFF35C",
+      assistant: "#9D5CFF",
     };
     return colors[type] || "#999";
   };
 
-  // Format timestamp
+  // Format timestamp in a more readable way
   const formatTime = (timestamp: string): string => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    // For recent transactions (less than 24 hours), show relative time
+    if (diffDays < 1) {
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins}m ago`;
+      return `${diffHours}h ago`;
+    } else if (diffDays === 1) {
+      return "Yesterday";
+    } else {
+      return date.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+      });
+    }
   };
 
   // Get agent name by ID
@@ -47,78 +70,125 @@ const TransactionHistory: React.FC<TransactionHistoryProps> = ({
     return agent?.type || "main";
   };
 
+  // Get status icon based on transaction status
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return <CheckCircle size={14} className="text-green-400" />;
+      case "pending":
+        return <Clock size={14} className="text-yellow-400" />;
+      case "failed":
+        return <AlertCircle size={14} className="text-red-400" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-3">
       {transactions.length === 0 ? (
-        <div className="text-center text-gray-500 py-6">
-          <Inbox size={32} className="mx-auto mb-2" />
-          <p>No transactions yet</p>
+        <div className="text-center py-12 bg-gray-800/30 backdrop-blur-sm rounded-xl border border-gray-700/50">
+          <Inbox size={32} className="mx-auto mb-3 text-gray-500" />
+          <p className="text-gray-400">No transactions yet</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Transactions will appear here once you start interacting with agents
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {transactions.map((tx) => (
-            <div key={tx.id} className="bg-gray-800 rounded-lg p-3">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  <div className="bg-blue-900 p-2 rounded-full">
-                    <Zap size={16} className="text-blue-400" />
-                  </div>
-                  <div className="ml-3">
-                    <div className="text-sm flex items-center space-x-2">
-                      <span
-                        style={{ color: getAgentColor(getAgentType(tx.from)) }}
-                      >
-                        {getAgentName(tx.from)}
-                      </span>
-                      <span className="text-gray-500 mx-1">→</span>
-                      <span
-                        style={{ color: getAgentColor(getAgentType(tx.to)) }}
-                      >
-                        {getAgentName(tx.to)}
-                      </span>
+          {transactions.map((tx) => {
+            const fromType = getAgentType(tx.from);
+            const toType = getAgentType(tx.to);
+            const fromColor = getAgentColor(fromType);
+            const toColor = getAgentColor(toType);
 
-                      {tx.status === "confirmed" ? (
-                        <span className="bg-green-900 text-green-300 text-xs px-2 py-0.5 rounded-full">
-                          Confirmed
-                        </span>
-                      ) : tx.status === "pending" ? (
-                        <span className="bg-yellow-900 text-yellow-300 text-xs px-2 py-0.5 rounded-full">
-                          Pending
-                        </span>
-                      ) : (
-                        <span className="bg-red-900 text-red-300 text-xs px-2 py-0.5 rounded-full">
-                          Failed
-                        </span>
-                      )}
+            return (
+              <div
+                key={tx.id}
+                className="group bg-gray-800/40 backdrop-blur-sm hover:bg-gray-800/60 rounded-xl p-3 border border-gray-700/50 transition-all duration-300 hover:border-gray-600/70"
+              >
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <div className="bg-blue-900/50 backdrop-blur-sm p-2 rounded-full border border-blue-800/50">
+                      <Zap size={16} className="text-blue-400" />
                     </div>
-                    <div className="text-xs text-gray-500 flex items-center">
-                      {formatTime(tx.timestamp)}
-                      {tx.xrpTxHash && (
-                        <a
-                          href={`https://testnet.xrpl.org/transactions/${tx.xrpTxHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ml-2 flex items-center text-blue-400 hover:text-blue-300"
-                        >
-                          <ExternalLink size={12} className="mr-1" />
-                          View on XRP Ledger
-                        </a>
-                      )}
+                    <div className="ml-3">
+                      <div className="text-sm flex items-center space-x-2">
+                        <span className="flex items-center gap-1">
+                          <span
+                            style={{ color: fromColor }}
+                            className="font-medium"
+                          >
+                            {getAgentName(tx.from)}
+                          </span>
+
+                          <ArrowRight
+                            size={12}
+                            className="text-gray-500 mx-0.5"
+                          />
+
+                          <span
+                            style={{ color: toColor }}
+                            className="font-medium"
+                          >
+                            {getAgentName(tx.to)}
+                          </span>
+                        </span>
+
+                        <div className="inline-flex">
+                          {tx.status === "confirmed" ? (
+                            <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-green-900/30 text-green-400 border border-green-800/30">
+                              {getStatusIcon(tx.status)}
+                              <span>Confirmed</span>
+                            </span>
+                          ) : tx.status === "pending" ? (
+                            <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-800/30">
+                              {getStatusIcon(tx.status)}
+                              <span>Pending</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-red-900/30 text-red-400 border border-red-800/30">
+                              {getStatusIcon(tx.status)}
+                              <span>Failed</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center mt-1">
+                        {formatTime(tx.timestamp)}
+                        {tx.xrpTxHash && (
+                          <a
+                            href={`https://testnet.xrpl.org/transactions/${tx.xrpTxHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 flex items-center text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            <ExternalLink size={10} className="mr-1" />
+                            View on XRP Ledger
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="font-mono text-yellow-400 font-medium">
+                    {formatCurrency(tx.amount)}
+                  </div>
                 </div>
-                <div className="font-mono text-yellow-400">
-                  {formatCurrency(tx.amount)}
-                </div>
+
+                {tx.memo && (
+                  <div className="mt-2 text-xs text-gray-400 border-t border-gray-700/50 pt-2 transition-all duration-300 group-hover:border-gray-600/70">
+                    <span className="font-medium">Memo:</span> {tx.memo}
+                  </div>
+                )}
+
+                {/* Subtle glowing effect for recent transactions */}
+                {new Date().getTime() - new Date(tx.timestamp).getTime() <
+                  30000 && (
+                  <div className="absolute inset-0 rounded-xl border border-blue-400/20 animate-pulse pointer-events-none"></div>
+                )}
               </div>
-
-              {tx.memo && (
-                <div className="mt-2 text-xs text-gray-400 border-t border-gray-700 pt-2">
-                  <span className="font-medium">Memo:</span> {tx.memo}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

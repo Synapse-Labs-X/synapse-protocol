@@ -1,16 +1,18 @@
-import React, { JSX, useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Send,
   Activity,
-  Cpu,
   MessageSquare,
   Layers,
   BarChart2,
   Bot,
   Sparkles,
   Zap,
+  CheckCircle,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
-import { Agent } from "@/types/agent";
+import { Agent, AgentType } from "@/types/agent";
 import { formatCurrency } from "@/lib/utils/formatters";
 
 interface PromptInputProps {
@@ -28,9 +30,28 @@ const PromptInput: React.FC<PromptInputProps> = ({
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [animateSubmit, setAnimateSubmit] = useState<boolean>(false);
+  const [showAgentSelector, setShowAgentSelector] = useState<boolean>(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      // Reset height to auto to properly calculate the new height
+      textareaRef.current.style.height = "auto";
+
+      // Set the height to scrollHeight to ensure all content is visible
+      const scrollHeight = textareaRef.current.scrollHeight;
+      textareaRef.current.style.height = scrollHeight + "px";
+    }
+  }, [prompt, isExpanded]);
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isProcessing) return;
+
+    // Scroll textarea back to top
+    if (textareaRef.current) {
+      textareaRef.current.scrollTop = 0;
+    }
 
     setAnimateSubmit(true);
     await onSubmit(prompt);
@@ -47,19 +68,41 @@ const PromptInput: React.FC<PromptInputProps> = ({
 
   const totalCost = selectedAgents.reduce((sum, agent) => sum + agent.cost, 0);
 
+  // Generate a suggested prompt example
+  const getRandomPromptExample = () => {
+    const examples = [
+      "Generate a comparison of machine learning models for financial prediction",
+      "Create a visual diagram showing relationships between AI agents",
+      "Translate this document into Spanish and summarize key points",
+      "Analyze this dataset and identify patterns in customer behavior",
+      "Write code to implement a basic neural network for image recognition",
+    ];
+    return examples[Math.floor(Math.random() * examples.length)];
+  };
+
+  // Use example prompt
+  const handleUseExample = () => {
+    setPrompt(getRandomPromptExample());
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="relative flex flex-col">
         {/* Animated top glow */}
         <div
           className={`absolute -top-4 left-0 right-0 h-6 bg-gradient-to-b from-blue-500/30 to-transparent transition-opacity duration-700 ${
-            isExpanded || prompt.length > 0 ? "opacity-100" : "opacity-0"
+            isExpanded || prompt.length > 0 ? "opacity-70" : "opacity-0"
           }`}
         ></div>
 
-        <h3 className="text-lg font-bold mb-2 flex items-center gap-2 text-white">
+        <h3 className="text-lg font-bold mb-3 flex items-center gap-2 text-white">
           <Sparkles size={16} className="text-blue-400" />
-          Agent Interaction
+          <span className="bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+            Agent Interaction
+          </span>
         </h3>
 
         <div
@@ -69,58 +112,100 @@ const PromptInput: React.FC<PromptInputProps> = ({
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <textarea
-            id="prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setIsExpanded(true)}
-            onBlur={() => setIsExpanded(false)}
-            placeholder="Enter a task for the agent network..."
-            className={`bg-gray-800/90 backdrop-blur-md border border-gray-700 rounded-xl p-4 text-white resize-none w-full transition-all duration-300 focus:border-blue-400 focus:shadow-[0_0_10px_rgba(59,130,246,0.5)] ${
-              isExpanded ? "h-40" : "h-24"
-            }`}
-          />
+          <div
+            className={`relative bg-gray-800/70 backdrop-blur-md border ${
+              isHovered ? "border-blue-500/50" : "border-gray-700/50"
+            } rounded-xl overflow-hidden transition-all duration-300`}
+          >
+            {/* Text area with glow effect */}
+            <textarea
+              ref={textareaRef}
+              id="prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsExpanded(true)}
+              onBlur={() => setIsExpanded(false)}
+              placeholder="Enter a task for the agent network..."
+              className={`bg-transparent px-4 pt-4 pb-12 text-white w-full transition-all duration-300 min-h-[120px] resize-none focus:outline-none`}
+              style={{
+                minHeight: isExpanded ? "180px" : "120px",
+              }}
+            />
 
-          <div className="absolute bottom-3 right-3 flex items-center space-x-2">
-            {prompt.length > 0 && (
-              <span className="text-xs text-gray-400">
-                {prompt.length} chars
-              </span>
-            )}
+            {/* Bottom actions panel */}
+            <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-700/50 bg-gray-800/50 backdrop-blur-sm flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                {/* Character count */}
+                <div
+                  className={`text-xs ${
+                    prompt.length > 0 ? "text-gray-300" : "text-gray-500"
+                  }`}
+                >
+                  {prompt.length} chars
+                </div>
+
+                {/* Use example button */}
+                <button
+                  type="button"
+                  onClick={handleUseExample}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Use example
+                </button>
+              </div>
+
+              {/* Agent selector toggle (when not processing) */}
+              {!isProcessing && (
+                <button
+                  type="button"
+                  onClick={() => setShowAgentSelector(!showAgentSelector)}
+                  className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                >
+                  {showAgentSelector ? (
+                    <>
+                      <span>Hide agents</span>
+                      <ChevronUp size={14} />
+                    </>
+                  ) : (
+                    <>
+                      <span>Show agents</span>
+                      <ChevronDown size={14} />
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Agent Suggestions - Only show when relevant */}
-      {prompt.length > 0 && !isProcessing && (
-        <div className="bg-gray-800/40 backdrop-blur-md border border-gray-700/50 rounded-xl p-4 shadow-lg transform transition-all duration-300 hover:scale-[1.01]">
-          <div className="text-xs font-medium text-blue-400 mb-2 flex items-center">
-            <Zap size={12} className="mr-1" />
-            Suggested Agents
-          </div>
-          <div className="text-xs text-gray-300">
-            Based on your prompt, the following agents will likely be selected.
-            The final selection will be determined at runtime.
-          </div>
-        </div>
-      )}
-
+      {/* Submit button with dynamic animations */}
       <button
         onClick={handleSubmit}
         disabled={isProcessing || !prompt.trim()}
-        className={`w-full py-3 rounded-xl flex items-center justify-center font-medium transition-all duration-300 ${
+        className={`relative w-full py-3 rounded-xl flex items-center justify-center font-medium transition-all duration-300 overflow-hidden ${
           isProcessing || !prompt.trim()
-            ? "bg-gray-700 text-gray-500 cursor-not-allowed"
-            : `bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white ${
-                animateSubmit ? "animate-pulse" : ""
-              }`
+            ? "bg-gray-800/70 text-gray-500 cursor-not-allowed"
+            : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white"
         }`}
       >
+        {/* Button background animation */}
+        {!isProcessing && prompt.trim() && (
+          <div className="absolute inset-0 w-full">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-400/40 to-blue-600/0 animate-shimmer"></div>
+          </div>
+        )}
+
         {isProcessing ? (
           <>
             <Activity size={18} className="animate-spin mr-2" />
-            Processing Task
+            <span>Processing Task</span>
+            <span className="ml-1 inline-flex">
+              <span className="animate-pulse delay-0">.</span>
+              <span className="animate-pulse delay-150">.</span>
+              <span className="animate-pulse delay-300">.</span>
+            </span>
           </>
         ) : (
           <>
@@ -128,10 +213,95 @@ const PromptInput: React.FC<PromptInputProps> = ({
               size={18}
               className={`mr-2 ${animateSubmit ? "animate-ping" : ""}`}
             />
-            Submit Task
+            <span className="relative">Submit Task</span>
           </>
         )}
       </button>
+
+      {/* Agent Selection Animation */}
+      <div
+        className={`transition-all duration-500 overflow-hidden ${
+          showAgentSelector ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="pt-2">
+          <div className="flex justify-between items-center mb-3">
+            <h4 className="text-sm font-medium text-gray-300 flex items-center gap-1.5">
+              <Bot size={14} className="text-blue-400" />
+              <span>Available Agents</span>
+            </h4>
+            <span className="text-xs text-gray-500">
+              Select agents for your task
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              {
+                id: "text-gen-1",
+                name: "Text Generator",
+                type: "text",
+                cost: 5,
+                selected: true,
+              },
+              {
+                id: "image-gen-1",
+                name: "Image Creator",
+                type: "image",
+                cost: 10,
+                selected: false,
+              },
+              {
+                id: "data-analyzer",
+                name: "Data Analyzer",
+                type: "data",
+                cost: 7,
+                selected: false,
+              },
+              {
+                id: "research-assistant",
+                name: "Research Assistant",
+                type: "assistant",
+                cost: 8,
+                selected: false,
+              },
+            ].map((agent) => (
+              <div
+                key={agent.id}
+                className={`p-2 rounded-lg border transition-all duration-200 cursor-pointer ${
+                  agent.selected
+                    ? "bg-blue-900/20 border-blue-500/50"
+                    : "bg-gray-800/50 border-gray-700/50 hover:border-gray-600"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {getAgentIconByType(agent.type as AgentType)}
+                    <span className="text-sm font-medium">{agent.name}</span>
+                  </div>
+                  <div className="text-xs">
+                    {agent.selected ? (
+                      <span className="flex items-center text-blue-400">
+                        <CheckCircle size={12} className="mr-1" />
+                        Selected
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">
+                        {formatCurrency(agent.cost)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 text-xs text-center text-gray-500">
+            Agents will be automatically selected based on your task
+            requirements
+          </div>
+        </div>
+      </div>
 
       {/* Selected Agents Display - with floating-card design */}
       {selectedAgents.length > 0 && (
@@ -141,7 +311,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
               <Activity size={14} className="mr-1" />
               Selected Agents
             </h3>
-            <span className="text-sm text-gray-400 bg-gray-700/60 px-2 py-1 rounded-md">
+            <span className="text-sm bg-gray-900/60 px-2 py-1 rounded-md border border-gray-700/50">
               Total Cost: {formatCurrency(totalCost)}
             </span>
           </div>
@@ -149,7 +319,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
             {selectedAgents.map((agent) => (
               <div
                 key={agent.id}
-                className="bg-gray-700/60 backdrop-blur-sm px-3 py-1 rounded-lg text-sm flex items-center transition-all duration-300 hover:bg-gray-600/60 animate-fadeIn"
+                className="bg-gray-700/60 backdrop-blur-sm px-3 py-1.5 rounded-lg text-sm flex items-center transition-all duration-300 hover:bg-gray-600/60 animate-fadeIn group"
                 style={{
                   borderLeft: `3px solid ${getAgentColorByType(agent.type)}`,
                   boxShadow: `0 0 8px rgba(${hexToRgb(
@@ -158,17 +328,28 @@ const PromptInput: React.FC<PromptInputProps> = ({
                 }}
               >
                 {getAgentIconByType(agent.type)}
-                <span className="ml-1">{agent.name}</span>
+                <span className="ml-1.5">{agent.name}</span>
                 <span className="ml-2 text-xs bg-gray-800/80 px-1.5 py-0.5 rounded text-gray-300">
                   {formatCurrency(agent.cost)}
                 </span>
+
+                {/* Subtle pulse animation on hover */}
+                <div
+                  className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{
+                    boxShadow: `0 0 10px rgba(${hexToRgb(
+                      getAgentColorByType(agent.type)
+                    )}, 0.5)`,
+                    animation: "pulse 2s infinite",
+                  }}
+                ></div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Add custom floating style animation */}
+      {/* Add custom animations */}
       <style jsx>{`
         @keyframes fadeIn {
           from {
@@ -180,17 +361,47 @@ const PromptInput: React.FC<PromptInputProps> = ({
             transform: translateY(0);
           }
         }
+
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+
         .animate-fadeIn {
           animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
+        }
+
+        .animate-pulse {
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .delay-0 {
+          animation-delay: 0ms;
+        }
+
+        .delay-150 {
+          animation-delay: 150ms;
+        }
+
+        .delay-300 {
+          animation-delay: 300ms;
         }
       `}</style>
     </div>
   );
 };
 
-// Helper functions for agent styling with enhanced colors
-function getAgentColorByType(type: string): string {
-  const colors: Record<string, string> = {
+// Helper functions for agent styling with  colors
+function getAgentColorByType(type: AgentType): string {
+  const colors: Record<AgentType, string> = {
     main: "#FF6B6B",
     text: "#4ECDC4",
     image: "#00BFFF",
@@ -200,20 +411,40 @@ function getAgentColorByType(type: string): string {
   return colors[type] || "#999";
 }
 
-function getAgentIconByType(type: string): JSX.Element {
+function getAgentIconByType(type: AgentType): React.ReactNode {
   switch (type) {
     case "main":
-      return <Cpu size={14} className="text-red-400" />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+          <Zap size={12} className="text-red-400" />
+        </div>
+      );
     case "text":
-      return <MessageSquare size={14} className="text-teal-400" />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-teal-500/20 flex items-center justify-center">
+          <MessageSquare size={12} className="text-teal-400" />
+        </div>
+      );
     case "image":
-      return <Layers size={14} className="text-blue-400" />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
+          <Layers size={12} className="text-blue-400" />
+        </div>
+      );
     case "data":
-      return <BarChart2 size={14} className="text-yellow-400" />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-yellow-500/20 flex items-center justify-center">
+          <BarChart2 size={12} className="text-yellow-400" />
+        </div>
+      );
     case "assistant":
-      return <Bot size={14} className="text-purple-400" />;
+      return (
+        <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
+          <Bot size={12} className="text-purple-400" />
+        </div>
+      );
     default:
-      return <></>;
+      return null;
   }
 }
 
