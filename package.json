@@ -18,6 +18,10 @@
     "react-dom": "^19.0.0",
     "react-force-graph": "^1.47.6",
     "react-force-graph-2d": "^1.27.1",
+    "react-markdown": "^8.0.7",
+    "react-syntax-highlighter": "^15.6.1",
+    "rehype-raw": "^6.1.1",
+    "remark-gfm": "^3.0.1",
     "socket.io-client": "^4.8.1",
     "uuid": "^11.1.0",
     "xrpl": "^4.2.0"
@@ -28,6 +32,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "eslint": "^9",
     "eslint-config-next": "15.3.0",
     "tailwindcss": "^4",

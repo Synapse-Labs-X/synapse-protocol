@@ -1,6 +1,11 @@
 // src/components/task/TaskResultModal.tsx
 import React from "react";
 import { X, CheckCircle, MessageSquare } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 
 interface TaskResultModalProps {
   isOpen: boolean;
@@ -74,7 +79,35 @@ const TaskResultModal: React.FC<TaskResultModalProps> = ({
               Result
             </div>
             <div className="bg-gray-900/60 p-4 rounded-lg border border-gray-700/50 max-h-96 overflow-y-auto">
-              <div className="whitespace-pre-wrap">{result}</div>
+              <ReactMarkdown
+                className="prose prose-invert max-w-none"
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                  code({ node, inline, className, children, style, ...props }) {
+                    const match = /language-(\w+)/.exec(className || "");
+                    return !inline && match ? (
+                      <SyntaxHighlighter
+                        language={match[1]}
+                        style={oneDark}
+                        PreTag="div"
+                        {...props}
+                      >
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code
+                        className="bg-gray-700 px-1 py-0.5 rounded"
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {result}
+              </ReactMarkdown>
             </div>
           </div>
 
