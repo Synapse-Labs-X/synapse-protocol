@@ -102,9 +102,9 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjYwMCIgdmlld0JveD0iMCAwIDYwMCA2MDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGRlZnM+CiAgICA8cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzMzMzc0RCIgc3Ryb2tlLXdpZHRoPSIxIiAvPgogICAgPC9wYXR0ZXJuPgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMGYxNzJhIiBvcGFjaXR5PSIwLjgiIC8+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIgb3BhY2l0eT0iMC4wNSIgLz4KPC9zdmc+')] opacity-30"></div>
         </div>
 
-        {/* Mobile content - Simple tabs for mobile view */}
-        <div className="md:hidden w-full flex flex-col">
-          <div className="flex-1 overflow-auto h-full">
+        {/* Mobile content - Full screen tabs for mobile view */}
+        <div className="md:hidden w-full flex flex-col h-full">
+          <div className="flex-1 overflow-hidden h-full">
             {activeTab === "network" && (
               <div className="h-full">
                 <AgentNetwork
@@ -117,7 +117,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
             )}
 
             {activeTab === "transactions" && (
-              <div className="p-4">
+              <div className="p-4 h-[calc(100vh-120px)] overflow-auto">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-bold">Recent Transactions</h2>
                 </div>
@@ -129,7 +129,7 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
             )}
 
             {activeTab === "prompt" && (
-              <div className="p-4">
+              <div className="p-4 h-[calc(100vh-120px)] overflow-auto">
                 <PromptInput
                   onSubmit={onPromptSubmit}
                   selectedAgents={selectedAgents}
@@ -138,6 +138,25 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
               </div>
             )}
           </div>
+
+          {/* Agent Details overlay for mobile */}
+          {selectedAgent && (
+            <div className="fixed inset-0 z-50 flex items-end p-4 bg-black/40 backdrop-blur-sm">
+              <div className="w-full max-h-[80vh] overflow-auto rounded-t-2xl animate-slideUp">
+                <AgentDetails
+                  agent={selectedAgent}
+                  onClose={onCloseDetails}
+                  recentTransactions={transactions
+                    .filter(
+                      (tx) =>
+                        tx.from === selectedAgent.id ||
+                        tx.to === selectedAgent.id
+                    )
+                    .slice(0, 5)}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Desktop Grid Layout - Hidden on mobile */}
@@ -251,8 +270,8 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
         </div>
       </div>
 
-      {/* Mobile Bottom Nav */}
-      <div className="md:hidden flex items-center justify-around border-t border-gray-800 bg-gray-900/80 backdrop-blur-md py-3">
+      {/* Mobile Bottom Nav - Fixed position to ensure it's always visible */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around border-t border-gray-800 bg-gray-900/95 backdrop-blur-lg py-3 z-10">
         <button
           className={`flex flex-col items-center justify-center gap-1 ${
             activeTab === "network" ? "text-blue-400" : "text-gray-500"
@@ -310,6 +329,17 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
           }
         }
 
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
         @keyframes shimmer {
           0% {
             transform: translateX(-100%);
@@ -337,6 +367,10 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
 
         .animate-fadeIn {
           animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out forwards;
         }
 
         .animate-shimmer {

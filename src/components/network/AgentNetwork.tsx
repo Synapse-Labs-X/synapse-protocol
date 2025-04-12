@@ -60,6 +60,29 @@ const AgentNetwork = ({
   const [needsZooming, setNeedsZooming] = useState(true);
   const isMobile = useIsMobile();
 
+  // Function to detect container dimensions and adjust graph size
+  const updateDimensions = useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const width = Math.max(rect.width, 100);
+
+      // For mobile, use full screen height minus any UI elements (status bar, bottom nav)
+      // This ensures the graph takes up the available space properly
+      let height = Math.max(rect.height, 100);
+      if (isMobile) {
+        // On mobile, calculate the available viewport height
+        // Adjust 120px for status bar + bottom nav to avoid scrolling
+        height = window.innerHeight - 120;
+      }
+
+      setDimensions({
+        width,
+        height,
+      });
+      setNeedsZooming(true);
+    }
+  }, [isMobile]);
+
   const zoomToFit = useCallback(() => {
     if (graphRef.current && graphData.nodes.length > 0) {
       graphRef.current.zoomToFit(400, 60);
@@ -70,36 +93,24 @@ const AgentNetwork = ({
   useEffect(() => {
     setHasMounted(true);
 
+    // Initial dimension detection with slight delay to ensure DOM is ready
     const timer = setTimeout(() => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({
-          width: rect.width || 800,
-          height: isMobile ? 300 : rect.height || 600,
-        });
-      }
+      updateDimensions();
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [isMobile]);
+  }, [updateDimensions]);
 
   useEffect(() => {
     if (!hasMounted) return;
 
     const handleResize = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({
-          width: Math.max(rect.width, 100),
-          height: isMobile ? 300 : Math.max(rect.height, 100),
-        });
-        setNeedsZooming(true);
-      }
+      updateDimensions();
     };
 
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [hasMounted, isMobile]);
+  }, [hasMounted, updateDimensions]);
 
   useEffect(() => {
     if (
@@ -131,7 +142,10 @@ const AgentNetwork = ({
         const angle = indexOfNode * angleStep;
 
         // Calculate position in a circle
-        const radius = Math.min(dimensions.width, dimensions.height) * 0.35; // Use 35% of smaller dimension for better layout
+        // For mobile, use a smaller radius to ensure nodes fit within the screen
+        const radius =
+          Math.min(dimensions.width, dimensions.height) *
+          (isMobile ? 0.28 : 0.35);
 
         const x = dimensions.width / 2 + radius * Math.cos(angle);
         const y = dimensions.height / 2 + radius * Math.sin(angle);
@@ -401,12 +415,17 @@ const AgentNetwork = ({
     }
 
     const label = graphNode.name || "Unknown";
-    const fontSize = isMobile ? 12 / globalScale : 14 / globalScale;
+    // Adjust font size for mobile screens
+    const fontSize = isMobile ? 10 / globalScale : 14 / globalScale;
     const nodeType = graphNode.type;
 
+    // Make node width proportional to the screen width on mobile
     const nodeWidth =
-      Math.max(label.length * (isMobile ? 6 : 8), 140) / globalScale;
-    const nodeHeight = (isMobile ? 36 : 44) / globalScale;
+      Math.max(label.length * (isMobile ? 5 : 8), isMobile ? 100 : 140) /
+      globalScale;
+
+    // Adjust node height for mobile
+    const nodeHeight = (isMobile ? 30 : 44) / globalScale;
     const cornerRadius = 6 / globalScale;
 
     const isSelected = selectedAgents.includes(graphNode.id);
@@ -484,6 +503,7 @@ const AgentNetwork = ({
     ctx.shadowBlur = 0;
     ctx.fillText(label, nodeX, nodeY - fontSize * 0.2);
 
+    // Adjust font size for balance text on mobile
     ctx.font = `${fontSize * 0.8}px Arial`;
     ctx.fillStyle = "#FFFFFF99";
     ctx.fillText(
@@ -529,7 +549,7 @@ const AgentNetwork = ({
       <div
         ref={containerRef}
         className="w-full h-full flex items-center justify-center"
-        style={{ height: isMobile ? "300px" : "100%" }}
+        style={{ height: isMobile ? "100%" : "100%" }}
       >
         <div className="text-center">
           <div className="w-12 h-12 border-t-4 border-blue-500 border-solid rounded-full animate-spin mx-auto"></div>
@@ -543,7 +563,7 @@ const AgentNetwork = ({
     <div
       ref={containerRef}
       className="w-full h-full relative"
-      style={{ height: isMobile ? "300px" : "100%" }}
+      style={{ height: isMobile ? "calc(100vh - 120px)" : "100%" }}
     >
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800"></div>
@@ -565,12 +585,12 @@ const AgentNetwork = ({
       </div>
 
       {hasMounted && graphData.nodes.length > 0 && (
-        <div className="relative z-10">
+        <div className="relative z-10 w-full h-full">
           <ForceGraph2D
             ref={graphRef}
             graphData={graphData}
             width={dimensions.width}
-            height={isMobile ? 300 : dimensions.height}
+            height={dimensions.height}
             nodeCanvasObject={nodeCanvasObject}
             nodePointerAreaPaint={(node: any, color, ctx) => {
               const graphNode = node as GraphNode;
@@ -585,9 +605,11 @@ const AgentNetwork = ({
 
               const label = graphNode.name || "Unknown";
               const nodeWidth =
-                Math.max(label.length * (isMobile ? 6 : 8), 140) /
-                ctx.getTransform().a;
-              const nodeHeight = (isMobile ? 36 : 44) / ctx.getTransform().a;
+                Math.max(
+                  label.length * (isMobile ? 5 : 8),
+                  isMobile ? 100 : 140
+                ) / ctx.getTransform().a;
+              const nodeHeight = (isMobile ? 30 : 44) / ctx.getTransform().a;
               const cornerRadius = 6 / ctx.getTransform().a;
 
               ctx.fillStyle = color;
