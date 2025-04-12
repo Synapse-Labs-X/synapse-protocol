@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Agent, AgentNetwork as AgentNetworkType } from "@/types/agent";
 import { Transaction } from "@/types/transaction";
-import { analyzePrompt } from "@/lib/agents/analysis";
-import { executeTransactions } from "@/lib/agents/orchestrator";
+import { v4 as uuidv4 } from "uuid";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import ClientSideOnly from "@/components/ClientSideOnly";
 import WalletInitialization from "@/components/wallet/WalletInitialization";
@@ -12,6 +11,7 @@ import walletInitService from "@/lib/xrp/walletInitService";
 import transactionService from "@/lib/xrp/transactionService";
 import walletService from "@/lib/wallet/walletService";
 import Image from "next/image";
+import { socketManager } from "@/lib/utils/socket";
 
 export default function DashboardPage() {
   // State management
@@ -26,7 +26,11 @@ export default function DashboardPage() {
   const [balance, setBalance] = useState<number>(995); // Starting balance
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasMounted, setHasMounted] = useState<boolean>(false);
-
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<Array<{ type: string; message: string }>>(
+    []
+  );
   // Wallet initialization states
   const [initializing, setInitializing] = useState<boolean>(false);
   const [initProgress, setInitProgress] = useState<{
@@ -171,6 +175,54 @@ export default function DashboardPage() {
     return () => clearTimeout(loadTimer);
   }, [hasMounted]);
 
+  useEffect(() => {
+    const socket = socketManager.connect();
+
+    // Connection events
+    socket.on("connect", () => {
+      console.log("[WebSocket] Connected to server");
+    });
+
+    socket.on("disconnect", () => {
+      console.log("[WebSocket] Disconnected from server");
+    });
+
+    // CrewAI execution logs
+    socket.on("log_update", (data) => {
+      console.groupCollapsed(`[CrewAI] ${data.log_prefix}`);
+      console.log("Type:", data.type);
+      console.log("Run ID:", data.run_id);
+      console.log("Data:", data.data);
+      console.groupEnd();
+    });
+
+    // Final results
+    socket.on("run_complete", (data) => {
+      console.group("[CrewAI] Run Completed");
+      console.log("Status:", data.status);
+      console.log("Run ID:", data.run_id);
+      if (data.error) {
+        console.error("Error:", data.error);
+      }
+      console.log("Final Result:", data.final_result);
+      console.groupEnd();
+    });
+
+    // Error handling
+    socket.on("error", (error) => {
+      console.error("[WebSocket Error]", error);
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("log_update");
+      socket.off("run_complete");
+      socket.off("error");
+      socket.disconnect();
+    };
+  }, []);
+
   // Initialize all agent wallets on page load
   const initializeWallets = async (agents: Agent[]) => {
     setInitializing(true);
@@ -224,87 +276,37 @@ export default function DashboardPage() {
     if (!promptText.trim()) return;
 
     setProcessing(true);
+    console.log("[Dashboard] Submitting task:", promptText);
 
     try {
-      // Analyze prompt to determine which agents to use
-      const analysisResult = await analyzePrompt(promptText);
+      const response = await fetch("/api/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_description: promptText }),
+      });
 
-      // Find the selected agent objects based on IDs
-      const agents = network.nodes.filter((agent) =>
-        analysisResult.selectedAgents.includes(agent.id)
-      );
+      console.log("[Dashboard] API Response Status:", response.status);
 
-      // Update agent statuses to processing
-      setNetwork((prevNetwork) => ({
-        ...prevNetwork,
-        nodes: prevNetwork.nodes.map((node) => {
-          if (analysisResult.selectedAgents.includes(node.id)) {
-            return { ...node, status: "processing" };
-          }
-          return node;
-        }),
-      }));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("[Dashboard] API Error:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        });
+        throw new Error("Failed to start task");
+      }
 
-      setSelectedAgents(agents);
+      const { run_id } = await response.json();
+      console.log("[Dashboard] Task started with Run ID:", run_id);
 
-      // Create transactions with selected agents
-      const transactionResults = await executeTransactions(
-        "main-agent",
-        analysisResult.selectedAgents,
-        agents.map((agent) => agent.cost)
-      );
-
-      // Add new transactions to the list
-      setTransactions((prev) =>
-        [
-          ...transactionResults.map((result) => result.transaction),
-          ...prev,
-        ].slice(0, 50)
-      );
-
-      // Update network with new transaction data
-      updateNetwork(
-        analysisResult.selectedAgents,
-        transactionResults.map((r) => r.transaction)
-      );
-
-      // Update balance
-      const totalCost = agents.reduce((sum, agent) => sum + agent.cost, 0);
-      setBalance((prev) => prev - totalCost);
-
-      // Reset agent statuses after processing
-      setTimeout(() => {
-        setNetwork((prevNetwork) => ({
-          ...prevNetwork,
-          nodes: prevNetwork.nodes.map((node) => {
-            if (analysisResult.selectedAgents.includes(node.id)) {
-              return {
-                ...node,
-                status: "active",
-                lastActive: new Date().toISOString(),
-              };
-            }
-            return node;
-          }),
-        }));
-      }, 2000);
+      const socket = socketManager.getSocket();
+      socket.emit("join_room", { run_id });
+      console.log("[Dashboard] Joined WebSocket room for run:", run_id);
     } catch (error) {
-      console.error("Failed to process prompt:", error);
-      // Reset agent statuses on error
-      setNetwork((prevNetwork) => ({
-        ...prevNetwork,
-        nodes: prevNetwork.nodes.map((node) => {
-          if (selectedAgents.map((a) => a.id).includes(node.id)) {
-            return { ...node, status: "active" };
-          }
-          return node;
-        }),
-      }));
+      console.error("[Dashboard] Submission error:", error);
     } finally {
-      setTimeout(() => {
-        setProcessing(false);
-        setSelectedAgents([]);
-      }, 3000);
+      setProcessing(false);
     }
   };
 
