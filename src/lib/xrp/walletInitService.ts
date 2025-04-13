@@ -1,7 +1,8 @@
-// src/lib/xrp/walletInitService.ts
+// src/lib/xrp/walletInitService.ts (Updated version)
 
 import XrpClient from "./client";
 import { Agent } from "@/types/agent";
+import walletKeyManager from "./walletKeyManager";
 
 interface WalletInitProgress {
   initialized: string[];
@@ -67,7 +68,7 @@ class WalletInitService {
       // Set the cached agents
       this.initProgress.cached = cachedAgents.map((agent) => agent.id);
 
-      // Mark cached agents as initialized immediately, but still continue with verification
+      // Mark cached agents as initialized immediately
       for (const agent of cachedAgents) {
         const index = this.initProgress.pending.indexOf(agent.id);
         if (index !== -1) {
@@ -79,10 +80,15 @@ class WalletInitService {
       // Update progress
       this.updateProgress(agents.length);
 
-      // Process all agents truly in parallel - no batching
-      const initPromises = agents.map(async (agent) => {
+      // Process remaining non-cached agents
+      const remainingAgents = agents.filter(
+        (agent) => !this.initProgress.cached.includes(agent.id)
+      );
+
+      // Process all remaining agents in parallel
+      const initPromises = remainingAgents.map(async (agent) => {
         try {
-          // Get or create wallet for agent - will use cache if available
+          // Get or create wallet for agent
           const wallet = await this.client.getWallet(agent.id);
 
           // Track successful initialization
@@ -90,7 +96,7 @@ class WalletInitService {
             success: true,
             agentId: agent.id,
             wallet,
-            cached: this.initProgress.cached.includes(agent.id),
+            cached: false,
           };
         } catch (error) {
           console.error(`Failed to initialize wallet for ${agent.id}:`, error);
@@ -110,14 +116,6 @@ class WalletInitService {
 
       // Process results
       for (const result of results) {
-        // If already processed as cached, skip
-        if (
-          this.initProgress.initialized.includes(result.agentId) &&
-          result.cached
-        ) {
-          continue;
-        }
-
         // Remove from pending
         this.initProgress.pending = this.initProgress.pending.filter(
           (id) => id !== result.agentId
