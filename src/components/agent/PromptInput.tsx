@@ -9,8 +9,6 @@ import {
   Sparkles,
   Zap,
   CheckCircle,
-  ChevronUp,
-  ChevronDown,
 } from "lucide-react";
 import { Agent, AgentType } from "@/types/agent";
 import { formatCurrency } from "@/lib/utils/formatters";
@@ -31,6 +29,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isFocused, setIsFocused] = useState<boolean>(false);
   const [animateSubmit, setAnimateSubmit] = useState<boolean>(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [showAgentSelector, setShowAgentSelector] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
