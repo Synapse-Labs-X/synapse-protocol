@@ -1,5 +1,6 @@
 import { TransactionRequest, TransactionResponse } from "@/types/transaction";
 import XrpClient from "./client";
+import walletKeyManager from "./walletKeyManager";
 
 // RLUSD currency code in hex format
 const RLUSD_CURRENCY_HEX = "524C555344000000000000000000000000000000";
@@ -15,23 +16,19 @@ class TransactionService {
   // Track pre-initialized wallets
   private preInitializedWallets: Set<string> = new Set();
 
-  // Wallet seeds for demonstration purposes (in a real app, these would be securely stored)
-  private agentWallets: Record<string, string> = {
-    "main-agent": "sEd71CfChR48xigRKg5AJcarEcgFMPk",
-    "text-gen-1": "sEdTPuSbzxXuUdCbBTihdyysn7oAurh",
-    "image-gen-1": "sEdTGUPzD5eykfGC4rN9SogFX9Z9Z3q",
-    "data-analyzer": "sEdSLxAFzKTXpiUEMiMucdivsXLFrZr",
-    "research-assistant": "sEdSrRmZ9H2PXF7Hbbn81H1zNBBVzrK",
-    "code-generator": "sEdV94H2PKs5Wddjf9ypVXxPZsitL16",
-    translator: "sEdVKpU8JC3LKqC2ZZpXp5hV8jV26U5",
-    summarizer: "sEdSXQ54jLXHtRZnKxRLvAxJr5R5mzM",
-  };
-
   // Agent address cache
   private agentAddresses: Record<string, string> = {};
 
   constructor() {
     this.client = XrpClient.getInstance();
+
+    // Pre-populate agent addresses from wallet key manager
+    walletKeyManager.getAllAgentIds().forEach((agentId) => {
+      const address = walletKeyManager.getAddress(agentId);
+      if (address) {
+        this.agentAddresses[agentId] = address;
+      }
+    });
   }
 
   /**

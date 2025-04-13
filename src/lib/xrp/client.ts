@@ -1,3 +1,4 @@
+// src/lib/xrp/client.ts (Updated version)
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Client, Wallet, xrpToDrops, dropsToXrp } from "xrpl";
 import {
@@ -5,6 +6,7 @@ import {
   TransactionRequest,
   TransactionResponse,
 } from "@/types/transaction";
+import walletKeyManager from "./walletKeyManager";
 
 // Type definitions to handle XRPL response structures
 interface XrplTransactionResult {
@@ -12,10 +14,10 @@ interface XrplTransactionResult {
     hash?: string;
     ledger_index?: number;
     meta?:
-    | {
-      TransactionResult?: string;
-    }
-    | string;
+      | {
+          TransactionResult?: string;
+        }
+      | string;
     Fee?: string;
     [key: string]: any;
   };
@@ -31,14 +33,6 @@ interface XrplAccountInfoResult {
   };
 }
 
-// Wallet cache structure
-interface CachedWallet {
-  address: string;
-  seed: string;
-  publicKey: string;
-  privateKey: string;
-}
-
 // XRP Client Singleton
 class XrpClient {
   private static instance: XrpClient;
@@ -48,7 +42,6 @@ class XrpClient {
   private initializing: boolean = false;
   private connectionPromise: Promise<void> | null = null;
   private networkUrl: string;
-  private localStorageKey: string = "synapse_xrp_wallets";
 
   // Cache for wallet promises to avoid duplicate wallet creation
   private walletPromises: Map<string, Promise<Wallet>> = new Map();
@@ -59,9 +52,6 @@ class XrpClient {
       process.env.NEXT_PUBLIC_XRP_TESTNET_URL ||
       "wss://s.altnet.rippletest.net:51233";
     this.client = new Client(this.networkUrl);
-
-    // Load wallets from cache if available
-    this.loadWalletsFromCache();
   }
 
   public static getInstance(): XrpClient {
@@ -111,7 +101,7 @@ class XrpClient {
   }
 
   /**
-   * Get a wallet for an agent - tries to load from cache first
+   * Get a wallet for an agent - uses the WalletKeyManager for demo wallets
    */
   public async getWallet(agentId: string): Promise<Wallet> {
     if (!this.initialized) {
@@ -130,7 +120,7 @@ class XrpClient {
       return existingPromise;
     }
 
-    // Create a new wallet promise - either load from cache or create new
+    // Create a new wallet promise
     const walletPromise = this.getOrCreateWallet(agentId);
     this.walletPromises.set(agentId, walletPromise);
 
@@ -144,44 +134,31 @@ class XrpClient {
   }
 
   /**
-   * Get a wallet from cache or create a new one
+   * Get a wallet from key manager or create a new one
    */
   private async getOrCreateWallet(agentId: string): Promise<Wallet> {
-    // First, try to get from localStorage
-    const cachedWallet = this.getWalletFromCache(agentId);
-
-    if (cachedWallet) {
-      try {
-        // Create wallet from seed if available
-        if (cachedWallet.seed) {
-          // Try to create the wallet from seed
-          const wallet = Wallet.fromSeed(cachedWallet.seed);
-
-          // Verify the wallet is valid by checking the address
-          if (wallet.address === cachedWallet.address) {
-            console.log(`Loaded wallet for agent ${agentId} from cache`);
-            this.wallets.set(agentId, wallet);
-            return wallet;
-          } else {
-            console.warn(
-              `Cached wallet address mismatch for ${agentId}, creating new wallet`
-            );
-          }
-        } else {
-          console.warn(`No seed available for cached wallet ${agentId}`);
-        }
-      } catch (error) {
-        console.error(`Error loading wallet from cache for ${agentId}:`, error);
-        // Fall through to creating a new wallet
-      }
+    // Special case for user-wallet - create dynamically as before
+    if (agentId === "user-wallet") {
+      return this.createWallet(agentId);
     }
 
-    // If no cached wallet or error loading, create a new one
+    // For all other agent wallets, use the wallet key manager
+    const demoWallet = walletKeyManager.getWallet(agentId);
+
+    if (demoWallet) {
+      console.log(`Using demo wallet for agent ${agentId}`);
+      this.wallets.set(agentId, demoWallet);
+      return demoWallet;
+    }
+
+    // If no demo wallet is available, create a new one
+    console.log(`No demo wallet found for ${agentId}, creating a new one`);
     return this.createWallet(agentId);
   }
 
   /**
-   * Create a new wallet for an agent
+   * Create a new wallet for an agent - only used for user wallet
+   * or agents without pre-configured demo wallets
    */
   public async createWallet(agentId: string): Promise<Wallet> {
     if (!this.initialized) {
@@ -207,12 +184,7 @@ class XrpClient {
         // Store the funded wallet in memory
         this.wallets.set(agentId, fundedWallet);
 
-        // Cache the wallet in localStorage
-        this.cacheWallet(agentId, fundedWallet);
-
-        console.log(
-          `Created and cached new funded wallet for agent ${agentId}`
-        );
+        console.log(`Created new funded wallet for agent ${agentId}`);
         return fundedWallet;
       } catch (fundingError) {
         console.warn(
@@ -222,8 +194,6 @@ class XrpClient {
 
         // Still use the generated wallet even if funding failed
         this.wallets.set(agentId, wallet);
-        this.cacheWallet(agentId, wallet);
-
         return wallet;
       }
     } catch (error) {
@@ -276,159 +246,14 @@ class XrpClient {
   }
 
   /**
-   * Save wallet data to localStorage
-   */
-  private cacheWallet(agentId: string, wallet: Wallet): void {
-    try {
-      if (typeof window === "undefined") return; // Skip if not in browser
-
-      // Get existing wallets from localStorage
-      const cachedData = localStorage.getItem(this.localStorageKey);
-      const walletCache: Record<string, CachedWallet> = cachedData
-        ? JSON.parse(cachedData)
-        : {};
-
-      // Ensure we have valid data to store
-      if (!wallet.address) {
-        console.warn(`Cannot cache wallet for ${agentId}: Missing address`);
-        return;
-      }
-
-      // Store only what we need for recreation
-      const walletData: CachedWallet = {
-        address: wallet.address,
-        seed: wallet.seed || "",
-        publicKey: wallet.publicKey,
-        privateKey: wallet.privateKey || "",
-      };
-
-      // Validate data before storing
-      if (!walletData.seed && !walletData.privateKey) {
-        console.warn(
-          `Cannot cache wallet for ${agentId}: Missing seed and privateKey`
-        );
-        return;
-      }
-
-      // Add the new wallet to cache
-      walletCache[agentId] = walletData;
-
-      // Save back to localStorage
-      localStorage.setItem(this.localStorageKey, JSON.stringify(walletCache));
-      console.log(`Successfully cached wallet for ${agentId}`);
-    } catch (error) {
-      console.error(`Failed to cache wallet for ${agentId}:`, error);
-      // Non-critical error, we can continue without caching
-    }
-  }
-
-  /**
-   * Get wallet data from localStorage
-   */
-  private getWalletFromCache(agentId: string): CachedWallet | null {
-    try {
-      if (typeof window === "undefined") return null; // Skip if not in browser
-
-      const cachedData = localStorage.getItem(this.localStorageKey);
-      if (!cachedData) return null;
-
-      const walletCache = JSON.parse(cachedData);
-      return walletCache[agentId] || null;
-    } catch (error) {
-      console.error(`Failed to retrieve cached wallet for ${agentId}:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Load all wallets from cache into memory
-   */
-  private loadWalletsFromCache(): void {
-    try {
-      if (typeof window === "undefined") return; // Skip if not in browser
-
-      const cachedData = localStorage.getItem(this.localStorageKey);
-      if (!cachedData) {
-        console.log("No cached wallets found in localStorage");
-        return;
-      }
-
-      // Safely parse JSON
-      let walletCache: Record<string, CachedWallet>;
-      try {
-        walletCache = JSON.parse(cachedData);
-        if (!walletCache || typeof walletCache !== "object") {
-          console.warn("Invalid wallet cache format, skipping cache loading");
-          return;
-        }
-      } catch (parseError) {
-        console.error("Failed to parse wallet cache:", parseError);
-        // If cache is corrupted, clear it
-        localStorage.removeItem(this.localStorageKey);
-        return;
-      }
-
-      // For each cached wallet, try to recreate the Wallet object
-      let successCount = 0;
-      Object.entries(walletCache).forEach(([agentId, walletData]) => {
-        try {
-          // Skip if missing required data
-          if (!walletData || !walletData.address) {
-            console.warn(
-              `Skipping invalid cached wallet for ${agentId}: Missing address`
-            );
-            return;
-          }
-
-          let wallet: Wallet | null = null;
-
-          // Try to create wallet from seed
-          if (walletData.seed) {
-            try {
-              // Use the appropriate method to create wallet from seed
-              wallet = Wallet.fromSeed(walletData.seed);
-
-              // Verify the wallet address matches
-              if (wallet.address === walletData.address) {
-                this.wallets.set(agentId, wallet);
-                successCount++;
-                console.log(
-                  `Successfully restored wallet for ${agentId} from cache`
-                );
-              } else {
-                console.warn(
-                  `Address mismatch for cached wallet ${agentId}: ${wallet.address} !== ${walletData.address}`
-                );
-              }
-            } catch (seedError) {
-              console.warn(
-                `Failed to create wallet from seed for ${agentId}:`,
-                seedError
-              );
-            }
-          } else {
-            console.warn(`No seed available for cached wallet ${agentId}`);
-          }
-        } catch (err) {
-          console.error(`Error loading wallet for ${agentId}:`, err);
-        }
-      });
-
-      console.log(`Successfully loaded ${successCount} wallets from cache`);
-    } catch (error) {
-      console.error("Failed to load wallets from cache:", error);
-    }
-  }
-
-  /**
    * Check if a wallet is already cached for an agent
    */
   public isWalletCached(agentId: string): boolean {
-    // Check in-memory cache first
+    // Check if we have this wallet in memory
     if (this.wallets.has(agentId)) return true;
 
-    // Then check localStorage
-    return this.getWalletFromCache(agentId) !== null;
+    // Or if we have a demo wallet for this agent
+    return walletKeyManager.hasKeys(agentId);
   }
 
   /**
@@ -437,21 +262,6 @@ class XrpClient {
   public clearWalletFromCache(agentId: string): void {
     // Remove from in-memory cache
     this.wallets.delete(agentId);
-
-    // Remove from localStorage
-    try {
-      if (typeof window === "undefined") return;
-
-      const cachedData = localStorage.getItem(this.localStorageKey);
-      if (!cachedData) return;
-
-      const walletCache = JSON.parse(cachedData);
-      delete walletCache[agentId];
-
-      localStorage.setItem(this.localStorageKey, JSON.stringify(walletCache));
-    } catch (error) {
-      console.error(`Failed to clear wallet for ${agentId} from cache:`, error);
-    }
   }
 
   /**
@@ -460,14 +270,6 @@ class XrpClient {
   public clearAllWallets(): void {
     // Clear in-memory cache
     this.wallets.clear();
-
-    // Clear localStorage
-    try {
-      if (typeof window === "undefined") return;
-      localStorage.removeItem(this.localStorageKey);
-    } catch (error) {
-      console.error("Failed to clear wallet cache:", error);
-    }
   }
 
   public async sendPayment(
@@ -494,12 +296,12 @@ class XrpClient {
         Destination: toWallet.address,
         Memos: memo
           ? [
-            {
-              Memo: {
-                MemoData: Buffer.from(memo, "utf8").toString("hex"),
+              {
+                Memo: {
+                  MemoData: Buffer.from(memo, "utf8").toString("hex"),
+                },
               },
-            },
-          ]
+            ]
           : undefined,
       });
 
@@ -595,7 +397,7 @@ class XrpClient {
       const accountInfo = await this.client.request({
         command: "account_info",
         account: address,
-        ledger_index: "validated"
+        ledger_index: "validated",
       });
       const drops = accountInfo?.result?.account_data?.Balance;
       if (drops) {
