@@ -77,16 +77,29 @@ const PromptInput: React.FC<PromptInputProps> = ({
       "Translate this document into Spanish and summarize key points",
       "Analyze this dataset and identify patterns in customer behavior",
       "Write code to implement a basic neural network for image recognition",
+      "Research the latest advances in quantum computing",
+      "Compare the performance of different cryptocurrency protocols",
+      "Explain how autonomous agents can collaborate on complex tasks",
+      "Draft a technical blog post about decentralized finance",
+      "Design a system architecture for a multi-agent application",
     ];
     return examples[Math.floor(Math.random() * examples.length)];
   };
 
   // Use example prompt
   const handleUseExample = () => {
-    setPrompt(getRandomPromptExample());
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
+    const example = getRandomPromptExample();
+    setPrompt(example);
+
+    // After setting the prompt, manually update textarea height
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height =
+          textareaRef.current.scrollHeight + "px";
+        textareaRef.current.focus();
+      }
+    }, 0);
   };
 
   return (
@@ -162,7 +175,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
                   setIsFocused(false);
                 }}
                 placeholder="Enter a task for the agent network..."
-                className={`bg-transparent px-4 pt-4 pb-12 text-white w-full transition-all duration-300 min-h-[120px] resize-none focus:outline-none z-10 relative`}
+                className={`bg-transparent px-4 pt-4 pb-4 text-white w-full transition-all duration-300 min-h-[120px] resize-none focus:outline-none pointer-events-auto`}
                 style={{
                   minHeight: isExpanded ? "180px" : "120px",
                   maxHeight: "300px", // Set max height for better mobile experience
@@ -172,7 +185,7 @@ const PromptInput: React.FC<PromptInputProps> = ({
 
             {/* Bottom actions panel */}
             <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-700/50 bg-gray-800/50 backdrop-blur-sm flex justify-between items-center">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 z-10 relative pointer-events-auto">
                 {/* Character count */}
                 <div
                   className={`text-xs ${
@@ -186,32 +199,11 @@ const PromptInput: React.FC<PromptInputProps> = ({
                 <button
                   type="button"
                   onClick={handleUseExample}
-                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors py-1 px-2 z-10 relative"
                 >
                   Use example
                 </button>
               </div>
-
-              {/* Agent selector toggle (when not processing) */}
-              {!isProcessing && (
-                <button
-                  type="button"
-                  onClick={() => setShowAgentSelector(!showAgentSelector)}
-                  className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1"
-                >
-                  {showAgentSelector ? (
-                    <>
-                      <span>Hide agents</span>
-                      <ChevronUp size={14} />
-                    </>
-                  ) : (
-                    <>
-                      <span>Show agents</span>
-                      <ChevronDown size={14} />
-                    </>
-                  )}
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -262,16 +254,6 @@ const PromptInput: React.FC<PromptInputProps> = ({
         }`}
       >
         <div className="pt-2">
-          <div className="flex justify-between items-center mb-3">
-            <h4 className="text-sm font-medium text-gray-300 flex items-center gap-1.5">
-              <Bot size={14} className="text-blue-400" />
-              <span>Available Agents</span>
-            </h4>
-            <span className="text-xs text-gray-500">
-              Select agents for your task
-            </span>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
               {
