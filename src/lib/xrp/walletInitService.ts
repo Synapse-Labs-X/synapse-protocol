@@ -2,7 +2,6 @@
 
 import XrpClient from "./client";
 import { Agent } from "@/types/agent";
-import walletKeyManager from "./walletKeyManager";
 
 interface WalletInitProgress {
   initialized: string[];
@@ -124,8 +123,7 @@ class WalletInitService {
         if (result.success) {
           this.initProgress.initialized.push(result.agentId);
           console.log(
-            `Initialized wallet for ${result.agentId}: ${
-              result.wallet?.address
+            `Initialized wallet for ${result.agentId}: ${result.wallet?.address
             }${result.cached ? " (from cache)" : ""}`
           );
         } else {
