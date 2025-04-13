@@ -21,6 +21,8 @@ import {
   extractAgentInfo,
 } from "@/lib/utils/crewAISocket";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
+import { useBalance } from "@/lib/hooks/useBalance"; // Import our new hook
+import balanceService from "@/lib/balance/balanceService"; // Import the service directly for initialization
 
 // Log update type definition for CrewAI WebSocket logs
 interface CrewAILogUpdate {
@@ -33,6 +35,16 @@ interface CrewAILogUpdate {
 export default function DashboardPage() {
   // State management
   const isMobile = useIsMobile();
+
+  // Use our new balance hook
+  const {
+    mainBalance,
+    agentBalances,
+    totalVolume,
+    updateMainBalance,
+    processTransaction,
+  } = useBalance();
+
   const [network, setNetwork] = useState<AgentNetworkType>({
     nodes: [],
     links: [],
@@ -41,9 +53,9 @@ export default function DashboardPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [selectedAgents, setSelectedAgents] = useState<Agent[]>([]);
   const [processing, setProcessing] = useState<boolean>(false);
-  const [balance, setBalance] = useState<number>(995); // Starting balance
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasMounted, setHasMounted] = useState<boolean>(false);
+  const [walletsInitialized, setWalletsInitialized] = useState<boolean>(false);
 
   // Task result state
   const [showTaskResult, setShowTaskResult] = useState<boolean>(false);
@@ -177,19 +189,23 @@ export default function DashboardPage() {
 
   // Initialize network data
   useEffect(() => {
-    if (!hasMounted) return;
+    if (!hasMounted || walletsInitialized) return;
 
     // Simulate loading delay with a modern loading animation
     const loadTimer = setTimeout(async () => {
       let walletAddress = "";
       if (!isMobile)
         walletAddress = (await walletService.getWalletAddress()) || "";
+
+      // Use the current main balance from our balance service or set a high default
+      const currentMainBalance = balanceService.getMainBalance() || 100;
+
       const initialNodes: Agent[] = [
         {
           id: "main-agent",
           name: "Orchestrator Agent",
           type: "main",
-          balance: 995,
+          balance: currentMainBalance, // Start with a high balance
           cost: 0,
           status: "active",
           walletAddress: walletAddress || undefined, // Convert null to undefined
@@ -198,7 +214,7 @@ export default function DashboardPage() {
           id: "text-gen-1",
           name: "Text Generator",
           type: "text",
-          balance: 5,
+          balance: agentBalances["text-gen-1"] || 0, // Start with zero or current accumulated value
           cost: 5,
           status: "active",
         },
@@ -206,7 +222,7 @@ export default function DashboardPage() {
           id: "image-gen-1",
           name: "Image Creator",
           type: "image",
-          balance: 0,
+          balance: agentBalances["image-gen-1"] || 0,
           cost: 10,
           status: "active",
         },
@@ -214,7 +230,7 @@ export default function DashboardPage() {
           id: "data-analyzer",
           name: "Data Analyzer",
           type: "data",
-          balance: 0,
+          balance: agentBalances["data-analyzer"] || 0,
           cost: 7,
           status: "active",
         },
@@ -222,7 +238,7 @@ export default function DashboardPage() {
           id: "research-assistant",
           name: "Research Assistant",
           type: "assistant",
-          balance: 0,
+          balance: agentBalances["research-assistant"] || 0,
           cost: 8,
           status: "active",
         },
@@ -230,7 +246,7 @@ export default function DashboardPage() {
           id: "code-generator",
           name: "Code Generator",
           type: "text",
-          balance: 0,
+          balance: agentBalances["code-generator"] || 0,
           cost: 6,
           status: "active",
         },
@@ -238,7 +254,7 @@ export default function DashboardPage() {
           id: "translator",
           name: "Language Translator",
           type: "text",
-          balance: 0,
+          balance: agentBalances["translator"] || 0,
           cost: 4,
           status: "active",
         },
@@ -246,11 +262,14 @@ export default function DashboardPage() {
           id: "summarizer",
           name: "Content Summarizer",
           type: "assistant",
-          balance: 0,
+          balance: agentBalances["summarizer"] || 0,
           cost: 3,
           status: "active",
         },
       ];
+
+      // Initialize agent balances in the service
+      balanceService.initializeAgentBalances(initialNodes);
 
       // Initial connections - primarily from main agent to others
       const initialLinks = [
@@ -266,21 +285,43 @@ export default function DashboardPage() {
         { source: "data-analyzer", target: "code-generator", value: 0.3 },
       ];
 
-      // Initial transaction
-      const initialTransaction: Transaction = {
-        id: "initial-tx-001",
-        from: "main-agent",
-        to: "text-gen-1",
-        amount: 5,
-        currency: "RLUSD",
-        timestamp: new Date().toISOString(),
-        status: "confirmed",
-        type: "payment",
-        memo: "Initial balance allocation",
-      };
+      // Initial transaction history handling
+      if (balanceService.getTotalTransactionVolume() === 0) {
+        // Only create the initial transaction if there's no history
+        const initialTransaction: Transaction = {
+          id: "initial-tx-001",
+          from: "main-agent",
+          to: "text-gen-1",
+          amount: 5,
+          currency: "RLUSD",
+          timestamp: new Date().toISOString(),
+          status: "confirmed",
+          type: "payment",
+          memo: "Initial balance allocation",
+        };
+
+        setTransactions([initialTransaction]);
+
+        // Process this transaction in our balance service
+        processTransaction(initialTransaction);
+      } else {
+        // Load initial transaction history (we could expand this later to store all transactions)
+        const initialTransaction: Transaction = {
+          id: "initial-tx-001",
+          from: "main-agent",
+          to: "text-gen-1",
+          amount: 5,
+          currency: "RLUSD",
+          timestamp: new Date().toISOString(),
+          status: "confirmed",
+          type: "payment",
+          memo: "Initial balance allocation",
+        };
+
+        setTransactions([initialTransaction]);
+      }
 
       setNetwork({ nodes: initialNodes, links: initialLinks });
-      setTransactions([initialTransaction]);
 
       // Create a mapping of agent IDs to names for the initialization UI
       const nameMap = initialNodes.reduce((map, agent) => {
@@ -291,13 +332,46 @@ export default function DashboardPage() {
 
       // Start pre-initializing wallets
       initializeWallets(initialNodes);
+
+      // Mark wallets as initialized to prevent reinitialization
+      setWalletsInitialized(true);
     }, 1500);
 
     return () => clearTimeout(loadTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMounted, isMobile]);
+
+  // Update network nodes when balances change
+  useEffect(() => {
+    if (!network.nodes.length) return;
+
+    setNetwork((prevNetwork) => ({
+      ...prevNetwork,
+      nodes: prevNetwork.nodes.map((node) => {
+        if (node.id === "main-agent") {
+          return { ...node, balance: mainBalance };
+        }
+
+        // Update other agent balances from our balance service
+        const agentBalance = agentBalances[node.id];
+        if (agentBalance !== undefined) {
+          return { ...node, balance: agentBalance };
+        }
+
+        return node;
+      }),
+    }));
+  }, [mainBalance, agentBalances, network.nodes.length]);
 
   // Initialize all agent wallets on page load
   const initializeWallets = async (agents: Agent[]) => {
+    // Check if wallets are already initialized to prevent duplicate initialization
+    if (initProgress.initialized.length > 0 && !initializing) {
+      console.log("Wallets already initialized, skipping initialization");
+      setIsLoading(false);
+      return;
+    }
+
     setInitializing(true);
     setInitProgress({
       initialized: [],
@@ -345,7 +419,6 @@ export default function DashboardPage() {
   };
 
   // Handle prompt submission with CrewAI WebSocket integration
-  // Update the handleSubmit function to use the WebSocket service
   /**
    * Handle prompt submission and start a task through WebSocket
    * @param promptText The user's task description
@@ -592,6 +665,10 @@ export default function DashboardPage() {
             // Add the transaction to the UI
             setTransactions((prev) => [transaction, ...prev]);
 
+            // Process this transaction in our balance service - it will now
+            // accumulate costs on the agent rather than making balances go negative
+            processTransaction(transaction);
+
             // Update the network visualization
             updateNetworkWithTransaction(transaction);
           }
@@ -649,36 +726,7 @@ export default function DashboardPage() {
       const status = payload.data?.status;
       console.log(`Run ${runId} completed with status: ${status}`);
 
-      // Fetch the final results from the API endpoint
-      fetchFinalResults(runId)
-        .then((result) => {
-          console.log("Final result fetched:", result);
-
-          // Update the task result data
-          setTaskResult(
-            result.final_output ||
-              result.final_result?.final_output ||
-              "Task completed successfully!"
-          );
-
-          // Extract agent names from the result for display
-          const agentNames = extractAgentNamesFromResult(result);
-          setTaskAgents(agentNames);
-
-          // Calculate total cost (if available in the result)
-          const totalCost = calculateTotalCost(result);
-          setTaskCost(totalCost);
-
-          // Show the result modal
-          setShowTaskResult(true);
-
-          // Reset processing state
-          setProcessing(false);
-        })
-        .catch((error) => {
-          console.error("Error fetching final results:", error);
-          setProcessing(false);
-        });
+      // The final results and UI updates will be handled by handleRunComplete
     }
   };
 
@@ -754,19 +802,16 @@ export default function DashboardPage() {
 
   const updateNetworkWithTransaction = (transaction: Transaction) => {
     setNetwork((prevNetwork) => {
-      // First, mark all previously processing agents as active
+      // Update nodes with new balances
       const updatedNodes = [...prevNetwork.nodes].map((node) => {
-        // Update nodes with new balances
         if (node.id === transaction.from) {
           return {
             ...node,
-            balance: node.balance - transaction.amount,
             status: "active" as const, // Set sender to active
           };
         } else if (node.id === transaction.to) {
           return {
             ...node,
-            balance: node.balance + transaction.amount,
             status: "processing" as const, // Set receiver to processing
           };
         } else if (node.status === "processing") {
@@ -871,6 +916,9 @@ export default function DashboardPage() {
       // Add transaction to UI
       setTransactions((prev) => [transaction, ...prev]);
 
+      // Process this transaction in our balance service
+      processTransaction(transaction);
+
       // Update network visualization
       updateNetworkWithTransaction(transaction);
 
@@ -912,26 +960,8 @@ export default function DashboardPage() {
 
   // Handler for balance updates from user wallet
   const handleBalanceUpdate = (amount: number) => {
-    // Update main agent balance
-    setBalance((prevBalance) => prevBalance + amount);
-
-    // Update main agent in the network
-    setNetwork((prevNetwork) => {
-      const updatedNodes = [...prevNetwork.nodes].map((node) => {
-        if (node.id === "main-agent") {
-          return {
-            ...node,
-            balance: node.balance + amount,
-          };
-        }
-        return node;
-      });
-
-      return {
-        ...prevNetwork,
-        nodes: updatedNodes,
-      };
-    });
+    // Update main agent balance through our balance service
+    updateMainBalance(amount);
 
     // Create a new transaction record for the top-up
     const topUpTransaction: Transaction = {
@@ -948,6 +978,9 @@ export default function DashboardPage() {
 
     // Add the transaction to the list
     setTransactions((prev) => [topUpTransaction, ...prev].slice(0, 50));
+
+    // Process transaction through the balance service
+    processTransaction(topUpTransaction);
   };
 
   // Show loading state while initializing
@@ -1082,7 +1115,7 @@ export default function DashboardPage() {
       <DashboardLayout
         network={network}
         transactions={transactions}
-        balance={balance}
+        balance={mainBalance}
         selectedAgent={selectedAgent}
         selectedAgents={selectedAgents}
         processing={processing}

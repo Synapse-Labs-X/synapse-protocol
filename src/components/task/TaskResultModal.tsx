@@ -22,7 +22,7 @@ const TaskResultModal: React.FC<TaskResultModalProps> = ({
   result,
   promptText = "",
   usedAgents = [],
-  totalCost = 0,
+  //totalCost = 0,
 }) => {
   if (!isOpen) return null;
 
@@ -109,11 +109,6 @@ const TaskResultModal: React.FC<TaskResultModalProps> = ({
                 {result}
               </ReactMarkdown>
             </div>
-          </div>
-
-          {/* Cost Information */}
-          <div className="mt-6 text-sm text-right text-gray-400">
-            Total Cost: {totalCost.toFixed(2)} RLUSD
           </div>
 
           <div className="mt-6 flex justify-end">
