@@ -32,7 +32,7 @@ const TaskResultModal: React.FC<TaskResultModalProps> = ({
         className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm"
         onClick={onClose}
       ></div>
-      <div className="relative z-10 bg-gray-800 rounded-lg w-full max-w-3xl mx-4 shadow-xl overflow-hidden">
+      <div className="relative z-10 bg-gray-800 rounded-lg w-full max-w-3xl mx-4 shadow-xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <CheckCircle size={18} className="text-green-400" />
@@ -46,7 +46,7 @@ const TaskResultModal: React.FC<TaskResultModalProps> = ({
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-auto flex-1">
           {/* Task Info */}
           <div className="mb-6">
             <div className="text-sm text-gray-400 mb-1">Task</div>
@@ -78,7 +78,7 @@ const TaskResultModal: React.FC<TaskResultModalProps> = ({
               <MessageSquare size={14} className="mr-1" />
               Result
             </div>
-            <div className="bg-gray-900/60 p-4 rounded-lg border border-gray-700/50 max-h-96 overflow-y-auto">
+            <div className="bg-gray-900/60 p-4 rounded-lg border border-gray-700/50 max-h-[40vh] overflow-y-auto">
               <ReactMarkdown
                 className="prose prose-invert max-w-none"
                 remarkPlugins={[remarkGfm]}

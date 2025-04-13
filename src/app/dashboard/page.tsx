@@ -84,7 +84,7 @@ export default function DashboardPage() {
       socketService.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile]);
+  }, []);
 
   /**
    * Initialize WebSocket connection to the CrewAI backend
