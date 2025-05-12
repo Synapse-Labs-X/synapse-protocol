@@ -50,7 +50,7 @@ Synapse Protocol revolutionizes how autonomous systems handle payments by provid
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-org/synapse-protocol.git
+git clone https://github.com/Synapse-Labs-X/synapse-protocol.git
 cd synapse-protocol
 ```
 
